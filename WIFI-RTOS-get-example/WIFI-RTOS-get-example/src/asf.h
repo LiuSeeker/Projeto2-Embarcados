@@ -102,6 +102,9 @@
 // From module: Part identification macros
 #include <parts.h>
 
+// From module: RTC - Real Time Clock
+#include <rtc.h>
+
 // From module: SAM FPU driver
 #include <fpu.h>
 
@@ -110,6 +113,10 @@
 
 // From module: SPI - Serial Peripheral Interface
 #include <spi.h>
+
+// From module: Sleep manager - SAM implementation
+#include <sam/sleepmgr.h>
+#include <sleepmgr.h>
 
 // From module: Standard serial I/O (stdio) - SAM implementation
 #include <stdio_serial.h>
@@ -123,6 +130,12 @@
 // From module: TWI - Two-wire Interface High Speed
 #include <twihs.h>
 
+// From module: TWIHS - Two-Wire Interface High Speed- SAM implementation
+#include <sam_twihs/twihs_master.h>
+#include <sam_twihs/twihs_slave.h>
+#include <twihs_master.h>
+#include <twihs_slave.h>
+
 // From module: UART - Univ. Async Rec/Trans
 #include <uart.h>
 
@@ -131,6 +144,9 @@
 
 // From module: USART - Univ. Syn Async Rec/Trans
 #include <usart.h>
+
+// From module: XDMAC - XDMA Controller
+#include <xdmac.h>
 
 // From module: pio_handler support enabled
 #include <pio_handler.h>

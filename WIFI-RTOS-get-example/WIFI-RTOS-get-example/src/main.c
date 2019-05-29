@@ -4,11 +4,35 @@
 #include "bsp/include/nm_bsp.h"
 #include "driver/include/m2m_wifi.h"
 #include "socket/include/socket.h"
+#include "bme280.h"
 
 #define STRING_EOL    "\r\n"
 #define STRING_HEADER "-- WINC1500 weather client example --"STRING_EOL	\
 "-- "BOARD_NAME " --"STRING_EOL	\
 "-- Compiled: "__DATE__ " "__TIME__ " --"STRING_EOL
+
+#define LED_PIO_ID		  ID_PIOC
+#define LED_PIO         PIOC
+#define LED_PIN		      8
+#define LED_PIN_MASK    (1<<LED_PIN)
+
+#define BUT_PIO_ID            ID_PIOA
+#define BUT_PIO               PIOA
+#define BUT_PIN		            11
+#define BUT_PIN_MASK          (1 << BUT_PIN)
+#define BUT_DEBOUNCING_VALUE  79
+
+#define TWIHS_MCU6050_ID    ID_TWIHS0
+#define TWIHS_MCU6050       TWIHS0
+
+
+#define TASK_WIFI_STACK_SIZE            (4096/sizeof(portSTACK_TYPE))
+#define TASK_WIFI_STACK_PRIORITY        (tskIDLE_PRIORITY)
+
+
+/************************************************************************/
+/* VAR globais                                                          */
+/************************************************************************/
 
 /** IP address of host. */
 uint32_t gu32HostIp = 0;
@@ -26,7 +50,6 @@ static bool gbConnectedWifi = false;
 /** Wi-Fi connection state */
 static uint8_t wifi_connected;
 
-
 /** Instance of HTTP client module. */
 static bool gbHostIpByName = false;
 
@@ -36,9 +59,28 @@ static bool gbTcpConnection = false;
 /** Server host name. */
 static char server_host_name[] = MAIN_SERVER_NAME;
 
+float rangePerDigit ; // 2G
+//const float rangePerDigit = 9.80665f ; // 2G
 
-#define TASK_WIFI_STACK_SIZE            (4096/sizeof(portSTACK_TYPE))
-#define TASK_WIFI_STACK_PRIORITY        (tskIDLE_PRIORITY)
+volatile uint8_t flag_led0 = 1;
+
+int16_t  accX, accY, accZ;
+volatile uint8_t  accXHigh, accYHigh, accZHigh;
+volatile uint8_t  accXLow,  accYLow,  accZLow;
+
+/************************************************************************/
+/* PROTOTYPES                                                           */
+/************************************************************************/
+
+void BUT_init(void);
+void LED_init(int estado);
+void pin_toggle(Pio *pio, uint32_t mask);
+
+
+/************************************************************************/
+/* RTOS application funcs                                               */
+/************************************************************************/
+
 
 extern void vApplicationStackOverflowHook(xTaskHandle *pxTask,
 signed char *pcTaskName);
@@ -79,8 +121,135 @@ extern void vApplicationMallocFailedHook(void)
 	configASSERT( ( volatile void * ) NULL );
 }
 
+/************************************************************************/
+/* handlers / callbacks                                                 */
+/************************************************************************/
+
+static void resolve_cb(uint8_t *hostName, uint32_t hostIp)
+{
+	gu32HostIp = hostIp;
+	gbHostIpByName = true;
+	printf("resolve_cb: %s IP address is %d.%d.%d.%d\r\n\r\n", hostName,
+	(int)IPV4_BYTE(hostIp, 0), (int)IPV4_BYTE(hostIp, 1),
+	(int)IPV4_BYTE(hostIp, 2), (int)IPV4_BYTE(hostIp, 3));
+}
+
+static void wifi_cb(uint8_t u8MsgType, void *pvMsg)
+{
+	switch (u8MsgType) {
+		case M2M_WIFI_RESP_CON_STATE_CHANGED:
+		{
+			tstrM2mWifiStateChanged *pstrWifiState = (tstrM2mWifiStateChanged *)pvMsg;
+			if (pstrWifiState->u8CurrState == M2M_WIFI_CONNECTED) {
+				printf("wifi_cb: M2M_WIFI_CONNECTED\r\n");
+				m2m_wifi_request_dhcp_client();
+				} else if (pstrWifiState->u8CurrState == M2M_WIFI_DISCONNECTED) {
+				printf("wifi_cb: M2M_WIFI_DISCONNECTED\r\n");
+				gbConnectedWifi = false;
+				wifi_connected = 0;
+			}
+
+			break;
+		}
+
+		case M2M_WIFI_REQ_DHCP_CONF:
+		{
+			uint8_t *pu8IPAddress = (uint8_t *)pvMsg;
+			printf("wifi_cb: IP address is %u.%u.%u.%u\r\n",
+			pu8IPAddress[0], pu8IPAddress[1], pu8IPAddress[2], pu8IPAddress[3]);
+			wifi_connected = M2M_WIFI_CONNECTED;
+			
+			/* Obtain the IP Address by network name */
+			//gethostbyname((uint8_t *)server_host_name);
+			break;
+		}
+
+		default:
+		{
+			break;
+		}
+	}
+}
+
+static void socket_cb(SOCKET sock, uint8_t u8Msg, void *pvMsg)
+{
+	
+	/* Check for socket event on TCP socket. */
+	if (sock == tcp_client_socket) {
+		
+		switch (u8Msg) {
+			case SOCKET_MSG_CONNECT:
+			{
+				printf("socket_msg_connect\n");
+				if (gbTcpConnection) {
+					memset(gau8ReceivedBuffer, 0, sizeof(gau8ReceivedBuffer));
+					sprintf((char *)gau8ReceivedBuffer, "%s", MAIN_PREFIX_BUFFER);
+
+					tstrSocketConnectMsg *pstrConnect = (tstrSocketConnectMsg *)pvMsg;
+					if (pstrConnect && pstrConnect->s8Error >= SOCK_ERR_NO_ERROR) {
+						printf("send \n");
+						send(tcp_client_socket, gau8ReceivedBuffer, strlen((char *)gau8ReceivedBuffer), 0);
+
+						memset(gau8ReceivedBuffer, 0, MAIN_WIFI_M2M_BUFFER_SIZE);
+						recv(tcp_client_socket, &gau8ReceivedBuffer[0], MAIN_WIFI_M2M_BUFFER_SIZE, 0);
+					}
+					else {
+						printf("socket_cb: connect error!\r\n");
+						gbTcpConnection = false;
+						close(tcp_client_socket);
+						tcp_client_socket = -1;
+					}
+				}
+			}
+			break;
+			
+
+
+			case SOCKET_MSG_RECV:
+			{
+				char *pcIndxPtr;
+				char *pcEndPtr;
+
+				tstrSocketRecvMsg *pstrRecv = (tstrSocketRecvMsg *)pvMsg;
+				if (pstrRecv && pstrRecv->s16BufferSize > 0) {
+					printf(pstrRecv->pu8Buffer);
+					
+					memset(gau8ReceivedBuffer, 0, sizeof(gau8ReceivedBuffer));
+					recv(tcp_client_socket, &gau8ReceivedBuffer[0], MAIN_WIFI_M2M_BUFFER_SIZE, 0);
+					} else {
+					printf("socket_cb: recv error!\r\n");
+					close(tcp_client_socket);
+					tcp_client_socket = -1;
+				}
+			}
+			break;
+
+			default:
+			break;
+		}
+	}
+}
+
+static void Button1_Handler(uint32_t id, uint32_t mask)
+{
+	pin_toggle(PIOD, (1<<28));
+	pin_toggle(LED_PIO, LED_PIN_MASK);
+}
+
+/************************************************************************/
+/* funcoes                                                              */
+/************************************************************************/
+
 static void configure_console(void)
 {
+	
+	/* Configura USART1 Pinos */
+	sysclk_enable_peripheral_clock(ID_PIOB);
+	sysclk_enable_peripheral_clock(ID_PIOA);
+	pio_set_peripheral(PIOB, PIO_PERIPH_D, PIO_PB4);  // RX
+	pio_set_peripheral(PIOA, PIO_PERIPH_A, PIO_PA21); // TX
+	MATRIX->CCFG_SYSIO |= CCFG_SYSIO_SYSIO4;
+	
 	const usart_serial_options_t uart_serial_options = {
 		.baudrate =		CONF_UART_BAUDRATE,
 		.charlength =	CONF_UART_CHAR_LENGTH,
@@ -92,7 +261,6 @@ static void configure_console(void)
 	sysclk_enable_peripheral_clock(CONSOLE_UART_ID);
 	stdio_serial_init(CONF_UART, &uart_serial_options);
 }
-
 
 /* http://www.cs.cmu.edu/afs/cs/academic/class/15213-f00/unpv12e/libfree/inet_aton.c */
 int inet_aton(const char *cp, in_addr *ap)
@@ -149,74 +317,6 @@ int inet_aton(const char *cp, in_addr *ap)
 	return 1;
 }
 
-static void resolve_cb(uint8_t *hostName, uint32_t hostIp)
-{
-	gu32HostIp = hostIp;
-	gbHostIpByName = true;
-	printf("resolve_cb: %s IP address is %d.%d.%d.%d\r\n\r\n", hostName,
-	(int)IPV4_BYTE(hostIp, 0), (int)IPV4_BYTE(hostIp, 1),
-	(int)IPV4_BYTE(hostIp, 2), (int)IPV4_BYTE(hostIp, 3));
-}
-
-static void socket_cb(SOCKET sock, uint8_t u8Msg, void *pvMsg)
-{
-	
-	/* Check for socket event on TCP socket. */
-	if (sock == tcp_client_socket) {
-		
-		switch (u8Msg) {
-			case SOCKET_MSG_CONNECT:
-			{
-				printf("socket_msg_connect\n");
-				if (gbTcpConnection) {
-					memset(gau8ReceivedBuffer, 0, sizeof(gau8ReceivedBuffer));
-					sprintf((char *)gau8ReceivedBuffer, "%s", MAIN_PREFIX_BUFFER);
-
-					tstrSocketConnectMsg *pstrConnect = (tstrSocketConnectMsg *)pvMsg;
-					if (pstrConnect && pstrConnect->s8Error >= SOCK_ERR_NO_ERROR) {
-						printf("send \n");
-						send(tcp_client_socket, gau8ReceivedBuffer, strlen((char *)gau8ReceivedBuffer), 0);
-
-						memset(gau8ReceivedBuffer, 0, MAIN_WIFI_M2M_BUFFER_SIZE);
-						recv(tcp_client_socket, &gau8ReceivedBuffer[0], MAIN_WIFI_M2M_BUFFER_SIZE, 0);
-						}
-					else {
-						printf("socket_cb: connect error!\r\n");
-						gbTcpConnection = false;
-						close(tcp_client_socket);
-						tcp_client_socket = -1;
-					}
-				}
-			}
-			break;
-			
-
-
-			case SOCKET_MSG_RECV:
-			{
-				char *pcIndxPtr;
-				char *pcEndPtr;
-
-				tstrSocketRecvMsg *pstrRecv = (tstrSocketRecvMsg *)pvMsg;
-				if (pstrRecv && pstrRecv->s16BufferSize > 0) {
-					printf(pstrRecv->pu8Buffer);
-					
-					memset(gau8ReceivedBuffer, 0, sizeof(gau8ReceivedBuffer));
-					recv(tcp_client_socket, &gau8ReceivedBuffer[0], MAIN_WIFI_M2M_BUFFER_SIZE, 0);
-					} else {
-					printf("socket_cb: recv error!\r\n");
-					close(tcp_client_socket);
-					tcp_client_socket = -1;
-				}
-			}
-			break;
-
-			default:
-			break;
-		}
-	}
-}
-
 static void set_dev_name_to_mac(uint8_t *name, uint8_t *mac_addr)
 {
 	/* Name must be in the format WINC1500_00:00 */
@@ -231,42 +331,81 @@ static void set_dev_name_to_mac(uint8_t *name, uint8_t *mac_addr)
 	}
 }
 
-static void wifi_cb(uint8_t u8MsgType, void *pvMsg)
-{
-	switch (u8MsgType) {
-		case M2M_WIFI_RESP_CON_STATE_CHANGED:
-		{
-			tstrM2mWifiStateChanged *pstrWifiState = (tstrM2mWifiStateChanged *)pvMsg;
-			if (pstrWifiState->u8CurrState == M2M_WIFI_CONNECTED) {
-				printf("wifi_cb: M2M_WIFI_CONNECTED\r\n");
-				m2m_wifi_request_dhcp_client();
-				} else if (pstrWifiState->u8CurrState == M2M_WIFI_DISCONNECTED) {
-				printf("wifi_cb: M2M_WIFI_DISCONNECTED\r\n");
-				gbConnectedWifi = false;
-				wifi_connected = 0;
-			}
-
-			break;
-		}
-
-		case M2M_WIFI_REQ_DHCP_CONF:
-		{
-			uint8_t *pu8IPAddress = (uint8_t *)pvMsg;
-			printf("wifi_cb: IP address is %u.%u.%u.%u\r\n",
-			pu8IPAddress[0], pu8IPAddress[1], pu8IPAddress[2], pu8IPAddress[3]);
-			wifi_connected = M2M_WIFI_CONNECTED;
-			
-			/* Obtain the IP Address by network name */
-			//gethostbyname((uint8_t *)server_host_name);
-			break;
-		}
-
-		default:
-		{
-			break;
-		}
-	}
+void pin_toggle(Pio *pio, uint32_t mask){
+	if(pio_get_output_data_status(pio, mask))
+	pio_clear(pio, mask);
+	else
+	pio_set(pio,mask);
 }
+
+uint8_t bme280_i2c_read_reg(uint CHIP_ADDRESS, uint reg_address, char *value){
+	uint i = 1;
+	
+	twihs_packet_t p_packet;
+	p_packet.chip         = CHIP_ADDRESS;//BME280_ADDRESS;
+	p_packet.addr_length  = 0;
+
+	char data = reg_address; //BME280_CHIP_ID_REG;
+	p_packet.buffer       = &data;
+	p_packet.length       = 1;
+	
+	if(twihs_master_write(TWIHS_MCU6050, &p_packet) != TWIHS_SUCCESS)
+	return 1;
+
+	p_packet.addr_length  = 0;
+	p_packet.length       = 1;
+	p_packet.buffer       = value;
+
+	if(twihs_master_read(TWIHS_MCU6050, &p_packet) != TWIHS_SUCCESS)
+	return 1;
+	
+	return 0;
+}
+
+int8_t bme280_i2c_config_temp(void){
+	int32_t ierror = 0x00;
+	
+	twihs_packet_t p_packet;
+	p_packet.chip         = BME280_ADDRESS;//BME280_ADDRESS;
+	p_packet.addr[0]      = BME280_CTRL_MEAS_REG;
+	p_packet.addr_length  = 1;
+
+	char data = 0b00100111; //BME280_CHIP_ID_REG;
+	p_packet.buffer       = &data;
+	p_packet.length       = 1;
+	
+	if(twihs_master_write(TWIHS_MCU6050, &p_packet) != TWIHS_SUCCESS)
+	return 1;
+}
+
+int8_t bme280_i2c_read_temp(uint *temp)
+{
+	int32_t ierror = 0x00;
+	char tmp[3];
+	
+	bme280_i2c_read_reg(BME280_ADDRESS, BME280_TEMPERATURE_MSB_REG, &tmp[2]);
+	bme280_i2c_read_reg(BME280_ADDRESS, BME280_TEMPERATURE_MSB_REG, &tmp[2]);
+	
+	bme280_i2c_read_reg(BME280_ADDRESS, BME280_TEMPERATURE_LSB_REG, &tmp[1]);
+	bme280_i2c_read_reg(BME280_ADDRESS, BME280_TEMPERATURE_LSB_REG, &tmp[1]);
+
+	*temp = tmp[2] << 8 | tmp[1];
+	return 0;
+}
+
+uint8_t bme280_validate_id(void){
+	char id;
+	bme280_i2c_read_reg(BME280_ADDRESS, BME280_CHIP_ID_REG, &id );
+	if (bme280_i2c_read_reg(BME280_ADDRESS, BME280_CHIP_ID_REG, &id ))
+	return 1;
+	if (id != 0x60)
+	return 1;
+	return 0;
+}
+
+/************************************************************************/
+/* TASKS                                                                */
+/************************************************************************/
 
 static void task_monitor(void *pvParameters)
 {
@@ -347,16 +486,71 @@ static void task_wifi(void *pvParameters) {
 	}
 }
 
+/************************************************************************/
+/* inits                                                                */
+/************************************************************************/
+
+void BUT_init(void){
+	/* config. pino botao em modo de entrada */
+	pmc_enable_periph_clk(BUT_PIO_ID);
+	pio_set_input(BUT_PIO, BUT_PIN_MASK, PIO_PULLUP | PIO_DEBOUNCE);
+	
+	/* config. interrupcao em borda de descida no botao do kit */
+	/* indica funcao (but_Handler) a ser chamada quando houver uma interrupção */
+	pio_enable_interrupt(BUT_PIO, BUT_PIN_MASK);
+	pio_handler_set(BUT_PIO, BUT_PIO_ID, BUT_PIN_MASK, PIO_IT_FALL_EDGE, Button1_Handler);
+	
+	/* habilita interrupçcão do PIO que controla o botao */
+	/* e configura sua prioridade                        */
+	NVIC_EnableIRQ(BUT_PIO_ID);
+	NVIC_SetPriority(BUT_PIO_ID, 1);
+};
+
+void LED_init(int estado){
+	pmc_enable_periph_clk(LED_PIO_ID);
+	pio_set_output(LED_PIO, LED_PIN_MASK, estado, 0, 0 );
+};
+
+void bme280_i2c_bus_init(void)
+{
+	twihs_options_t bno055_option;
+	pmc_enable_periph_clk(TWIHS_MCU6050_ID);
+
+	/* Configure the options of TWI driver */
+	bno055_option.master_clk = sysclk_get_cpu_hz();
+	bno055_option.speed      = 10000;
+	twihs_master_init(TWIHS_MCU6050, &bno055_option);
+}
+
+/************************************************************************/
+/* main                                                                 */
+/************************************************************************/
+
 int main(void)
 {
+	
+	/* buffer para recebimento de dados */
+	uint8_t bufferRX[100];
+	uint8_t bufferTX[100];
+	
+	uint8_t rtn;
+	
 	/* Initialize the board. */
 	sysclk_init();
 	board_init();
+	
+	/* Disable the watchdog */
+	WDT->WDT_MR = WDT_MR_WDDIS;
 
 	/* Initialize the UART console. */
 	configure_console();
 	printf(STRING_HEADER);
 	
+	/* Configura Leds */
+	LED_init(1);
+	
+	/* Configura os botões */
+	BUT_init();
 	
 	if (xTaskCreate(task_wifi, "Wifi", TASK_WIFI_STACK_SIZE, NULL,
 	TASK_WIFI_STACK_PRIORITY, NULL) != pdPASS) {
