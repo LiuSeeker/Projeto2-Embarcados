@@ -214,6 +214,10 @@ static void socket_cb(SOCKET sock, uint8_t u8Msg, void *pvMsg)
 				if (pstrRecv && pstrRecv->s16BufferSize > 0) {
 					printf(pstrRecv->pu8Buffer);
 					
+					char *ponteiro = strstr(pstrRecv->pu8Buffer, "nome");
+					
+					
+					
 					memset(gau8ReceivedBuffer, 0, sizeof(gau8ReceivedBuffer));
 					recv(tcp_client_socket, &gau8ReceivedBuffer[0], MAIN_WIFI_M2M_BUFFER_SIZE, 0);
 					} else {
@@ -404,6 +408,42 @@ uint8_t bme280_validate_id(void){
 }
 
 /************************************************************************/
+/* inits                                                                */
+/************************************************************************/
+
+void BUT_init(void){
+	/* config. pino botao em modo de entrada */
+	pmc_enable_periph_clk(BUT_PIO_ID);
+	pio_set_input(BUT_PIO, BUT_PIN_MASK, PIO_PULLUP | PIO_DEBOUNCE);
+	
+	/* config. interrupcao em borda de descida no botao do kit */
+	/* indica funcao (but_Handler) a ser chamada quando houver uma interrupção */
+	pio_enable_interrupt(BUT_PIO, BUT_PIN_MASK);
+	pio_handler_set(BUT_PIO, BUT_PIO_ID, BUT_PIN_MASK, PIO_IT_FALL_EDGE, Button1_Handler);
+	
+	/* habilita interrupçcão do PIO que controla o botao */
+	/* e configura sua prioridade                        */
+	NVIC_EnableIRQ(BUT_PIO_ID);
+	NVIC_SetPriority(BUT_PIO_ID, 1);
+};
+
+void LED_init(int estado){
+	pmc_enable_periph_clk(LED_PIO_ID);
+	pio_set_output(LED_PIO, LED_PIN_MASK, estado, 0, 0 );
+};
+
+void bme280_i2c_bus_init(void)
+{
+	twihs_options_t bno055_option;
+	pmc_enable_periph_clk(TWIHS_MCU6050_ID);
+
+	/* Configure the options of TWI driver */
+	bno055_option.master_clk = sysclk_get_cpu_hz();
+	bno055_option.speed      = 10000;
+	twihs_master_init(TWIHS_MCU6050, &bno055_option);
+}
+
+/************************************************************************/
 /* TASKS                                                                */
 /************************************************************************/
 
@@ -486,40 +526,32 @@ static void task_wifi(void *pvParameters) {
 	}
 }
 
-/************************************************************************/
-/* inits                                                                */
-/************************************************************************/
-
-void BUT_init(void){
-	/* config. pino botao em modo de entrada */
-	pmc_enable_periph_clk(BUT_PIO_ID);
-	pio_set_input(BUT_PIO, BUT_PIN_MASK, PIO_PULLUP | PIO_DEBOUNCE);
+static void task_bme(void *pvParameters){
+	bme280_i2c_bus_init();
 	
-	/* config. interrupcao em borda de descida no botao do kit */
-	/* indica funcao (but_Handler) a ser chamada quando houver uma interrupção */
-	pio_enable_interrupt(BUT_PIO, BUT_PIN_MASK);
-	pio_handler_set(BUT_PIO, BUT_PIO_ID, BUT_PIN_MASK, PIO_IT_FALL_EDGE, Button1_Handler);
+	Bool validado = false;
+	uint temperatura;
 	
-	/* habilita interrupçcão do PIO que controla o botao */
-	/* e configura sua prioridade                        */
-	NVIC_EnableIRQ(BUT_PIO_ID);
-	NVIC_SetPriority(BUT_PIO_ID, 1);
-};
-
-void LED_init(int estado){
-	pmc_enable_periph_clk(LED_PIO_ID);
-	pio_set_output(LED_PIO, LED_PIN_MASK, estado, 0, 0 );
-};
-
-void bme280_i2c_bus_init(void)
-{
-	twihs_options_t bno055_option;
-	pmc_enable_periph_clk(TWIHS_MCU6050_ID);
-
-	/* Configure the options of TWI driver */
-	bno055_option.master_clk = sysclk_get_cpu_hz();
-	bno055_option.speed      = 10000;
-	twihs_master_init(TWIHS_MCU6050, &bno055_option);
+	while(1){
+		if(bme280_validate_id()){
+			printf("Chip nao encontrado\n");
+			validado = false;
+		}
+		else if (!validado){
+			validado = true;
+			bme280_i2c_config_temp();
+		}
+		if(validado){
+			if (bme280_i2c_read_temp(&temperatura)){
+				printf("erro ao ler temperatura \n");
+			}
+			else{
+				printf("Temperatura: %d \n", temperatura);
+			}
+		}
+		vTaskDelay(1000/portTICK_PERIOD_MS);
+	}
+	
 }
 
 /************************************************************************/
@@ -553,6 +585,11 @@ int main(void)
 	BUT_init();
 	
 	if (xTaskCreate(task_wifi, "Wifi", TASK_WIFI_STACK_SIZE, NULL,
+	TASK_WIFI_STACK_PRIORITY, NULL) != pdPASS) {
+		printf("Failed to create Wifi task\r\n");
+	}
+	
+	if (xTaskCreate(task_bme, "bme", TASK_WIFI_STACK_SIZE, NULL,
 	TASK_WIFI_STACK_PRIORITY, NULL) != pdPASS) {
 		printf("Failed to create Wifi task\r\n");
 	}

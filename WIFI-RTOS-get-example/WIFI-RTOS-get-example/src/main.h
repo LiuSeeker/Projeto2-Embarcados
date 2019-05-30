@@ -28,7 +28,7 @@ static uint8_t gacDeviceName[] = MAIN_M2M_DEVICE_NAME;
 #define MAIN_PREFIX_BUFFER                  "GET /data=20&temp=25&nome=liu HTTP/1.1\r\n Accept: */*\r\n\r\n"
 
 /** Weather information provider server. */
-#define MAIN_SERVER_NAME                    "10.103.0.46"
+#define MAIN_SERVER_NAME                    "10.103.0.27"
 
 /** Receive buffer size. */
 #define MAIN_WIFI_M2M_BUFFER_SIZE           1400
