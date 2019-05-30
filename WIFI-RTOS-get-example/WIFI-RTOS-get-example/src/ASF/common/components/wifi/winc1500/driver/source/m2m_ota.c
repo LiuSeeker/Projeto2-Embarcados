@@ -4,36 +4,29 @@
  *
  * \brief NMC1500 IoT OTA Interface.
  *
- * Copyright (c) 2016 Atmel Corporation. All rights reserved.
+ * Copyright (c) 2016-2018 Microchip Technology Inc. and its subsidiaries.
  *
  * \asf_license_start
  *
  * \page License
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
+ * Subject to your compliance with these terms, you may use Microchip
+ * software and any derivatives exclusively with Microchip products.
+ * It is your responsibility to comply with third party license terms applicable
+ * to your use of third party software (including open source software) that
+ * may accompany Microchip software.
  *
- * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
- *
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution.
- *
- * 3. The name of Atmel may not be used to endorse or promote products derived
- *    from this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY ATMEL "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT ARE
- * EXPRESSLY AND SPECIFICALLY DISCLAIMED. IN NO EVENT SHALL ATMEL BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
- * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
- * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
- * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
+ * THIS SOFTWARE IS SUPPLIED BY MICROCHIP "AS IS". NO WARRANTIES,
+ * WHETHER EXPRESS, IMPLIED OR STATUTORY, APPLY TO THIS SOFTWARE,
+ * INCLUDING ANY IMPLIED WARRANTIES OF NON-INFRINGEMENT, MERCHANTABILITY,
+ * AND FITNESS FOR A PARTICULAR PURPOSE. IN NO EVENT WILL MICROCHIP BE
+ * LIABLE FOR ANY INDIRECT, SPECIAL, PUNITIVE, INCIDENTAL OR CONSEQUENTIAL
+ * LOSS, DAMAGE, COST OR EXPENSE OF ANY KIND WHATSOEVER RELATED TO THE
+ * SOFTWARE, HOWEVER CAUSED, EVEN IF MICROCHIP HAS BEEN ADVISED OF THE
+ * POSSIBILITY OR THE DAMAGES ARE FORESEEABLE.  TO THE FULLEST EXTENT
+ * ALLOWED BY LAW, MICROCHIP'S TOTAL LIABILITY ON ALL CLAIMS IN ANY WAY
+ * RELATED TO THIS SOFTWARE WILL NOT EXCEED THE AMOUNT OF FEES, IF ANY,
+ * THAT YOU HAVE PAID DIRECTLY TO MICROCHIP FOR THIS SOFTWARE.
  *
  * \asf_license_stop
  *
@@ -163,7 +156,7 @@ NMI_API sint8  m2m_ota_notif_set_url(uint8 * u8Url)
 	/*Todo: we may change it to data pkt but we need to give it higer priority
 			but the priorty is not implemnted yet in data pkt
 	*/
-	ret = hif_send(M2M_REQ_GROUP_OTA,M2M_OTA_REQ_START_UPDATE,u8Url,u16UrlSize,NULL,0,0);
+	ret = hif_send(M2M_REQ_GROUP_OTA,M2M_OTA_REQ_NOTIF_SET_URL,u8Url,u16UrlSize,NULL,0,0);
 	return ret;
 
 }
@@ -226,7 +219,28 @@ NMI_API sint8 m2m_ota_start_update(uint8 * u8DownloadUrl)
 	/*Todo: we may change it to data pkt but we need to give it higer priority
 			but the priorty is not implemnted yet in data pkt
 	*/
-	ret = hif_send(M2M_REQ_GROUP_OTA,M2M_OTA_REQ_START_UPDATE,u8DownloadUrl,u16DurlSize,NULL,0,0);
+	ret = hif_send(M2M_REQ_GROUP_OTA,M2M_OTA_REQ_START_FW_UPDATE,u8DownloadUrl,u16DurlSize,NULL,0,0);
+	return ret;
+}
+/*!
+@fn	\
+	NMI_API sint8 m2m_ota_start_update_crt(uint8 * u8DownloadUrl);
+
+@brief
+	Request OTA start for the Cortus app image.
+
+@param [in]	u8DownloadUrl
+		The cortus application image url.
+
+@return
+	The function SHALL return 0 for success and a negative value otherwise.
+
+*/
+NMI_API sint8 m2m_ota_start_update_crt(uint8 * u8DownloadUrl)
+{
+	sint8 ret = M2M_SUCCESS;
+	uint16 u16DurlSize = m2m_strlen(u8DownloadUrl) + 1;
+	ret = hif_send(M2M_REQ_GROUP_OTA,M2M_OTA_REQ_START_CRT_UPDATE,u8DownloadUrl,u16DurlSize,NULL,0,0);
 	return ret;
 }
 
@@ -244,7 +258,40 @@ NMI_API sint8 m2m_ota_start_update(uint8 * u8DownloadUrl)
 NMI_API sint8 m2m_ota_rollback(void)
 {
 	sint8 ret = M2M_SUCCESS;
-	ret = hif_send(M2M_REQ_GROUP_OTA,M2M_OTA_REQ_ROLLBACK,NULL,0,NULL,0,0);
+	ret = hif_send(M2M_REQ_GROUP_OTA,M2M_OTA_REQ_ROLLBACK_FW,NULL,0,NULL,0,0);
+	return ret;
+}
+/*!
+@fn	\
+	NMI_API sint8 m2m_ota_rollback_crt(void);
+
+@brief
+	Request Cortus application OTA Rollback image
+
+@return
+	The function SHALL return 0 for success and a negative value otherwise.
+*/
+NMI_API sint8 m2m_ota_rollback_crt(void)
+{
+	sint8 ret = M2M_SUCCESS;
+	ret = hif_send(M2M_REQ_GROUP_OTA,M2M_OTA_REQ_ROLLBACK_CRT,NULL,0,NULL,0,0);
+	return ret;
+}
+
+/*!
+@fn	\
+	NMI_API sint8 m2m_ota_abort(void);
+
+@brief
+	Request OTA Abort
+
+@return
+	The function SHALL return 0 for success and a negative value otherwise.
+*/
+NMI_API sint8 m2m_ota_abort(void)
+{
+	sint8 ret = M2M_SUCCESS;
+	ret = hif_send(M2M_REQ_GROUP_OTA,M2M_OTA_REQ_ABORT,NULL,0,NULL,0,0);
 	return ret;
 }
 
@@ -265,6 +312,23 @@ NMI_API sint8 m2m_ota_switch_firmware(void)
 	ret = hif_send(M2M_REQ_GROUP_OTA,M2M_OTA_REQ_SWITCH_FIRMWARE,NULL,0,NULL,0,0);
 	return ret;
 }
+/*!
+@fn	\
+	NMI_API sint8 m2m_ota_switch_crt(void);
+
+@brief
+	Switch to the upgraded cortus application.
+
+@return
+	The function SHALL return 0 for success and a negative value otherwise.
+*/
+NMI_API sint8 m2m_ota_switch_crt(void)
+{
+	sint8 ret = M2M_SUCCESS;
+	ret = hif_send(M2M_REQ_GROUP_OTA,M2M_OTA_REQ_SWITCH_CRT_IMG,NULL,0,NULL,0,0);
+	return ret;
+}
+
 /*!
 @fn	\
 	NMI_API sint8 m2m_ota_get_firmware_version(tstrM2mRev * pstrRev);

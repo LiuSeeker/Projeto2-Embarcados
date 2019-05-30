@@ -62,4 +62,9 @@
 /** Enable TWIHS port. */
 #define CONF_BOARD_TWIHS0
 
+
+/** Enable SD MMC interface pins through HSMCI */
+#define CONF_BOARD_SD_MMC_HSMCI
+
+//#define CONF_HSMCI_XDMAC_CHANNEL  XDMAC_CHANNEL_HWID_HSMCI
 #endif /* CONF_BOARD_H_INCLUDED */

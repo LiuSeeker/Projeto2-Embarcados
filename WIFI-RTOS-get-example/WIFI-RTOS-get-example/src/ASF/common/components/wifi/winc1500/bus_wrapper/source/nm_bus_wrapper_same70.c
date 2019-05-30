@@ -4,36 +4,29 @@
  *
  * \brief This module contains NMC1000 bus wrapper APIs implementation.
  *
- * Copyright (c) 2016 Atmel Corporation. All rights reserved.
+ * Copyright (c) 2016-2018 Microchip Technology Inc. and its subsidiaries.
  *
  * \asf_license_start
  *
  * \page License
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
+ * Subject to your compliance with these terms, you may use Microchip
+ * software and any derivatives exclusively with Microchip products.
+ * It is your responsibility to comply with third party license terms applicable
+ * to your use of third party software (including open source software) that
+ * may accompany Microchip software.
  *
- * 1. Redistributions of source code must retain the above copyright notice,
- *    this list of conditions and the following disclaimer.
- *
- * 2. Redistributions in binary form must reproduce the above copyright notice,
- *    this list of conditions and the following disclaimer in the documentation
- *    and/or other materials provided with the distribution.
- *
- * 3. The name of Atmel may not be used to endorse or promote products derived
- *    from this software without specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY ATMEL "AS IS" AND ANY EXPRESS OR IMPLIED
- * WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT ARE
- * EXPRESSLY AND SPECIFICALLY DISCLAIMED. IN NO EVENT SHALL ATMEL BE LIABLE FOR
- * ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
- * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
- * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
- * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
- * STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN
- * ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
+ * THIS SOFTWARE IS SUPPLIED BY MICROCHIP "AS IS". NO WARRANTIES,
+ * WHETHER EXPRESS, IMPLIED OR STATUTORY, APPLY TO THIS SOFTWARE,
+ * INCLUDING ANY IMPLIED WARRANTIES OF NON-INFRINGEMENT, MERCHANTABILITY,
+ * AND FITNESS FOR A PARTICULAR PURPOSE. IN NO EVENT WILL MICROCHIP BE
+ * LIABLE FOR ANY INDIRECT, SPECIAL, PUNITIVE, INCIDENTAL OR CONSEQUENTIAL
+ * LOSS, DAMAGE, COST OR EXPENSE OF ANY KIND WHATSOEVER RELATED TO THE
+ * SOFTWARE, HOWEVER CAUSED, EVEN IF MICROCHIP HAS BEEN ADVISED OF THE
+ * POSSIBILITY OR THE DAMAGES ARE FORESEEABLE.  TO THE FULLEST EXTENT
+ * ALLOWED BY LAW, MICROCHIP'S TOTAL LIABILITY ON ALL CLAIMS IN ANY WAY
+ * RELATED TO THIS SOFTWARE WILL NOT EXCEED THE AMOUNT OF FEES, IF ANY,
+ * THAT YOU HAVE PAID DIRECTLY TO MICROCHIP FOR THIS SOFTWARE.
  *
  * \asf_license_stop
  *
@@ -115,20 +108,15 @@ static sint8 nm_i2c_write_special(uint8 *wb1, uint16 sz1, uint8 *wb2, uint16 sz2
 #endif
 
 #ifdef CONF_WINC_USE_SPI
+/** PIO instance used by CS. */
+Pio *p_pio_cs;
 
 /** Fast CS macro. */
-#define SPI_ASSERT_CS()		do {PIOD->PIO_CODR = (1 << 25);} while(0)
-#define SPI_DEASSERT_CS()	do {PIOD->PIO_SODR = (1 << 25);} while(0)
+#define SPI_ASSERT_CS()		do {p_pio_cs->PIO_CODR = 1 << (CONF_WINC_SPI_CS_GPIO & 0x1F);} while(0)
+#define SPI_DEASSERT_CS()	do {p_pio_cs->PIO_SODR = 1 << (CONF_WINC_SPI_CS_GPIO & 0x1F);} while(0)
 
 static sint8 spi_rw(uint8 *pu8Mosi, uint8 *pu8Miso, uint16 u16Sz)
 {
-	/*
-	static uint16 cntSpi = 0 ;
-	uint16 cpu16Sz		= u16Sz;
-	uint8 *cppu8Mosi	= pu8Mosi;
-	uint8 *cppu8Miso	= pu8Miso;
-	*/
-	
 	uint8 u8Dummy = 0;
 	uint8 u8SkipMosi = 0, u8SkipMiso = 0;
 	uint16_t txd_data = 0;
@@ -146,12 +134,12 @@ static sint8 spi_rw(uint8 *pu8Mosi, uint8 *pu8Miso, uint16 u16Sz)
 	else {
 		return M2M_ERR_BUS_FAIL;
 	}
-	
+
 	SPI_ASSERT_CS();
 	while (u16Sz) {
 		txd_data = *pu8Mosi;
 		spi_write(CONF_WINC_SPI, txd_data, 0, 0);
-		
+
 		/* Read SPI master data register. */
 		spi_read(CONF_WINC_SPI, &rxd_data, &uc_pcs);
 		*pu8Miso = rxd_data;
@@ -164,21 +152,9 @@ static sint8 spi_rw(uint8 *pu8Mosi, uint8 *pu8Miso, uint16 u16Sz)
 	}
 	SPI_DEASSERT_CS();
 
-/*
-	uint8 i =0;
-	printf("[%d] %MOSI: 0x", cntSpi++);
-	for(i = 0; i<cpu16Sz; i++)
-		printf("%x", *(cppu8Mosi+i) );
-	printf(" / MISO: 0x");
-	for(i = 0; i<cpu16Sz; i++)
-		printf("%x", *(cppu8Miso+i) );
-	printf(" / Size %d \n", cpu16Sz);
-*/
 	return M2M_SUCCESS;
 }
 #endif
-
-
 
 /*
  *	@fn		nm_bus_init
@@ -210,17 +186,16 @@ sint8 nm_bus_init(void *pvinit)
 	ioport_set_pin_mode(CONF_WINC_SPI_MISO_GPIO, CONF_WINC_SPI_MISO_FLAGS);
 	ioport_set_pin_mode(CONF_WINC_SPI_MOSI_GPIO, CONF_WINC_SPI_MOSI_FLAGS);
 	ioport_set_pin_mode(CONF_WINC_SPI_CLK_GPIO, CONF_WINC_SPI_CLK_FLAGS);
-	//ioport_set_pin_mode(CONF_WINC_SPI_CS_GPIO, CONF_WINC_SPI_CS_FLAGS);
-
+	ioport_set_pin_mode(CONF_WINC_SPI_CS_GPIO, CONF_WINC_SPI_CS_FLAGS);
 	ioport_disable_pin(CONF_WINC_SPI_MISO_GPIO);
 	ioport_disable_pin(CONF_WINC_SPI_MOSI_GPIO);
 	ioport_disable_pin(CONF_WINC_SPI_CLK_GPIO);
-	ioport_disable_pin(CONF_WINC_SPI_CS_GPIO);
-	
-	/* disable CS control by peripheral */
-	PIOD->PIO_PER = (1<<25);
-	PIOD->PIO_OER = (1<<25);
+
+	/* Configure CS for manual (GPIO) control. */
+	p_pio_cs = (Pio *)((uint32_t)PIOA + (PIO_DELTA * (CONF_WINC_SPI_CS_GPIO >> 5)));
 	SPI_DEASSERT_CS();
+	ioport_set_pin_dir(CONF_WINC_SPI_CS_GPIO, IOPORT_DIR_OUTPUT);
+	ioport_enable_pin(CONF_WINC_SPI_CS_GPIO);
 
 	spi_enable_clock(CONF_WINC_SPI);
 	spi_disable(CONF_WINC_SPI);
@@ -233,12 +208,11 @@ sint8 nm_bus_init(void *pvinit)
 	spi_set_clock_phase(CONF_WINC_SPI, CONF_WINC_SPI_NPCS, CONF_WINC_SPI_PHA);
 	spi_set_bits_per_transfer(CONF_WINC_SPI, CONF_WINC_SPI_NPCS, SPI_CSR_BITS_8_BIT);
 	spi_set_baudrate_div(CONF_WINC_SPI, CONF_WINC_SPI_NPCS,
-			spi_calc_baudrate_div(CONF_WINC_SPI_CLOCK, sysclk_get_cpu_hz()));
+			(sysclk_get_peripheral_hz() / CONF_WINC_SPI_CLOCK));
 	spi_set_transfer_delay(CONF_WINC_SPI, CONF_WINC_SPI_NPCS, CONF_WINC_SPI_DLYBS,
 			CONF_WINC_SPI_DLYBCT);
 	spi_enable(CONF_WINC_SPI);
-	
-	SPI_DEASSERT_CS();
+
 	nm_bsp_reset();
 #endif
 	return result;
@@ -297,10 +271,17 @@ sint8 nm_bus_ioctl(uint8 u8Cmd, void* pvParameter)
  */
 sint8 nm_bus_deinit(void)
 {
+	sint8 result = M2M_SUCCESS;
+
+#ifdef CONF_WINC_USE_I2C
+	//TODO:
+#endif /* CONF_WINC_USE_I2C */
+#ifdef CONF_WINC_USE_SPI
 	spi_disable(CONF_WINC_SPI);
 	ioport_set_pin_dir(CONF_WINC_SPI_MOSI_GPIO, IOPORT_DIR_INPUT);
 	ioport_set_pin_dir(CONF_WINC_SPI_MISO_GPIO, IOPORT_DIR_INPUT);
 	ioport_set_pin_dir(CONF_WINC_SPI_CLK_GPIO, IOPORT_DIR_INPUT);
 	ioport_set_pin_dir(CONF_WINC_SPI_CS_GPIO, IOPORT_DIR_INPUT);
-	return M2M_SUCCESS;
+#endif /* CONF_WINC_USE_SPI */
+	return result;
 }
