@@ -378,8 +378,26 @@ int8_t bme280_i2c_config_temp(void){
 	p_packet.buffer       = &data;
 	p_packet.length       = 1;
 	
-	if(twihs_master_write(TWIHS_MCU6050, &p_packet) != TWIHS_SUCCESS)
-	return 1;
+	if(twihs_master_write(TWIHS_MCU6050, &p_packet) != TWIHS_SUCCESS){
+		return 1;
+	}
+		
+	delay_ms(10);
+	
+	twihs_packet_t p_packet2;
+	p_packet2.chip         = BME280_ADDRESS;//BME280_ADDRESS;
+	p_packet2.addr[0]      = BME280_CTRL_HUMIDITY_REG;
+	p_packet2.addr_length  = 1;
+
+	char data2 = 0b00000001; //BME280_CHIP_ID_REG;
+	p_packet2.buffer       = &data2;
+	p_packet2.length       = 1;
+		
+	if(twihs_master_write(TWIHS_MCU6050, &p_packet2) != TWIHS_SUCCESS){
+		return 1;
+	}
+	
+	return 0;
 }
 
 int8_t bme280_i2c_read_temp(uint *temp)
@@ -394,6 +412,36 @@ int8_t bme280_i2c_read_temp(uint *temp)
 	bme280_i2c_read_reg(BME280_ADDRESS, BME280_TEMPERATURE_LSB_REG, &tmp[1]);
 
 	*temp = tmp[2] << 8 | tmp[1];
+	return 0;
+}
+
+int8_t bme280_i2c_read_umi(uint *umi)
+{
+	int32_t ierror = 0x00;
+	char tmp[3];
+	
+	bme280_i2c_read_reg(BME280_ADDRESS, BME280_HUMIDITY_MSB_REG, &tmp[2]);
+	bme280_i2c_read_reg(BME280_ADDRESS, BME280_HUMIDITY_MSB_REG, &tmp[2]);
+	
+	bme280_i2c_read_reg(BME280_ADDRESS, BME280_HUMIDITY_LSB_REG, &tmp[1]);
+	bme280_i2c_read_reg(BME280_ADDRESS, BME280_HUMIDITY_LSB_REG, &tmp[1]);
+
+	*umi = tmp[2] << 8 | tmp[1];
+	return 0;
+}
+
+int8_t bme280_i2c_read_press(uint *press)
+{
+	int32_t ierror = 0x00;
+	char tmp[3];
+	
+	bme280_i2c_read_reg(BME280_ADDRESS, BME280_PRESSURE_MSB_REG, &tmp[2]);
+	bme280_i2c_read_reg(BME280_ADDRESS, BME280_PRESSURE_MSB_REG, &tmp[2]);
+	
+	bme280_i2c_read_reg(BME280_ADDRESS, BME280_PRESSURE_LSB_REG, &tmp[1]);
+	bme280_i2c_read_reg(BME280_ADDRESS, BME280_PRESSURE_LSB_REG, &tmp[1]);
+
+	*press = tmp[2] << 8 | tmp[1];
 	return 0;
 }
 
@@ -530,7 +578,7 @@ static void task_bme(void *pvParameters){
 	bme280_i2c_bus_init();
 	
 	Bool validado = false;
-	uint temperatura;
+	uint temperatura, pressao, umidade;
 	
 	while(1){
 		if(bme280_validate_id()){
@@ -547,6 +595,18 @@ static void task_bme(void *pvParameters){
 			}
 			else{
 				printf("Temperatura: %d \n", temperatura);
+			}
+			if (bme280_i2c_read_press(&pressao)){
+				printf("erro ao ler pressao \n");
+			}
+			else{
+				printf("Pressao: %d \n", pressao);
+			}
+			if (bme280_i2c_read_umi(&umidade)){
+				printf("erro ao ler umidade \n");
+			}
+			else{
+				printf("Umidade: %d \n", umidade);
 			}
 		}
 		vTaskDelay(1000/portTICK_PERIOD_MS);

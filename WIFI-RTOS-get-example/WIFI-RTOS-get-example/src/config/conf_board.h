@@ -59,4 +59,7 @@
 /** define BOARD_NO_LED_1. */
 #define BOARD_NO_LED_1
 
+/** Enable TWIHS port. */
+#define CONF_BOARD_TWIHS0
+
 #endif /* CONF_BOARD_H_INCLUDED */
