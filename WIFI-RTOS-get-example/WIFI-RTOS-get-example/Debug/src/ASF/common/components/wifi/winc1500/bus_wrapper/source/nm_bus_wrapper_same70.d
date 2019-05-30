@@ -150,7 +150,8 @@ src/ASF/common/components/wifi/winc1500/bus_wrapper/source/nm_bus_wrapper_same70
  ../src/ASF/common/utils/interrupt/interrupt_sam_nvic.h \
  ../src/ASF/sam/boards/same70_xplained/same70_xplained.h \
  ../src/ASF/common/components/wifi/winc1500/bus_wrapper/include/nm_bus_wrapper.h \
- ../src/asf.h ../src/ASF/sam/utils/status_codes.h \
+ ../src/config/asf.h ../src/ASF/sam/drivers/afec/afec.h \
+ ../src/ASF/sam/utils/status_codes.h \
  ../src/ASF/common/services/delay/delay.h \
  ../src/ASF/common/services/clock/sysclk.h ../src/config/conf_clock.h \
  ../src/ASF/common/services/clock/same70/sysclk.h \
@@ -159,6 +160,13 @@ src/ASF/common/components/wifi/winc1500/bus_wrapper/source/nm_bus_wrapper_same70
  ../src/ASF/sam/drivers/pmc/pmc.h ../src/ASF/common/services/clock/pll.h \
  ../src/ASF/common/services/clock/same70/pll.h \
  ../src/ASF/common/services/delay/sam/cycle_counter.h \
+ ../src/ASF/thirdparty/fatfs/fatfs-r0.09/src/diskio.h \
+ ../src/ASF/thirdparty/fatfs/fatfs-r0.09/src/integer.h \
+ ../src/ASF/thirdparty/fatfs/fatfs-r0.09/src/ff.h \
+ ../src/ASF/thirdparty/fatfs/fatfs-r0.09/src/ffconf.h \
+ ../src/config/conf_fatfs.h \
+ ../src/ASF/thirdparty/fatfs/fatfs-r0.09/src/ffconf.h \
+ ../src/ASF/thirdparty/fatfs/fatfs-r0.09/src/integer.h \
  ../src/ASF/thirdparty/freertos/freertos-8.2.3/Source/include/FreeRTOS.h \
  ../src/config/FreeRTOSConfig.h \
  ../src/ASF/thirdparty/freertos/freertos-8.2.3/Source/include/projdefs.h \
@@ -188,10 +196,16 @@ src/ASF/common/components/wifi/winc1500/bus_wrapper/source/nm_bus_wrapper_same70
  ../src/ASF/common/services/ioport/ioport.h \
  ../src/ASF/common/services/ioport/sam/ioport_pio.h \
  ../src/ASF/sam/drivers/matrix/matrix.h ../src/ASF/sam/drivers/mpu/mpu.h \
+ ../src/ASF/common/services/storage/ctrl_access/ctrl_access.h \
+ ../src/config/conf_access.h \
+ ../src/ASF/common/components/memory/sd_mmc/sd_mmc_mem.h \
  ../src/ASF/sam/drivers/pmc/sleep.h ../src/ASF/sam/drivers/rtc/rtc.h \
  ../src/ASF/sam/utils/fpu/fpu.h \
  ../src/ASF/sam/boards/same70_xplained/led.h \
- ../src/ASF/sam/drivers/spi/spi.h \
+ ../src/ASF/common/components/memory/sd_mmc/sd_mmc.h \
+ ../src/config/conf_sd_mmc.h \
+ ../src/ASF/common/services/spi/sam_spi/spi_master.h \
+ ../src/ASF/sam/drivers/spi/spi.h ../src/config/conf_spi_master.h \
  ../src/ASF/common/services/sleepmgr/sam/sleepmgr.h \
  ../src/config/conf_sleepmgr.h \
  ../src/ASF/common/services/sleepmgr/sleepmgr.h \
@@ -512,7 +526,9 @@ c:\program\ files\ (x86)\atmel\studio\7.0\toolchain\arm\arm-gnu-toolchain\arm-no
 
 ../src/ASF/common/components/wifi/winc1500/bus_wrapper/include/nm_bus_wrapper.h:
 
-../src/asf.h:
+../src/config/asf.h:
+
+../src/ASF/sam/drivers/afec/afec.h:
 
 ../src/ASF/sam/utils/status_codes.h:
 
@@ -535,6 +551,20 @@ c:\program\ files\ (x86)\atmel\studio\7.0\toolchain\arm\arm-gnu-toolchain\arm-no
 ../src/ASF/common/services/clock/same70/pll.h:
 
 ../src/ASF/common/services/delay/sam/cycle_counter.h:
+
+../src/ASF/thirdparty/fatfs/fatfs-r0.09/src/diskio.h:
+
+../src/ASF/thirdparty/fatfs/fatfs-r0.09/src/integer.h:
+
+../src/ASF/thirdparty/fatfs/fatfs-r0.09/src/ff.h:
+
+../src/ASF/thirdparty/fatfs/fatfs-r0.09/src/ffconf.h:
+
+../src/config/conf_fatfs.h:
+
+../src/ASF/thirdparty/fatfs/fatfs-r0.09/src/ffconf.h:
+
+../src/ASF/thirdparty/fatfs/fatfs-r0.09/src/integer.h:
 
 ../src/ASF/thirdparty/freertos/freertos-8.2.3/Source/include/FreeRTOS.h:
 
@@ -596,6 +626,12 @@ c:\program\ files\ (x86)\atmel\studio\7.0\toolchain\arm\arm-gnu-toolchain\arm-no
 
 ../src/ASF/sam/drivers/mpu/mpu.h:
 
+../src/ASF/common/services/storage/ctrl_access/ctrl_access.h:
+
+../src/config/conf_access.h:
+
+../src/ASF/common/components/memory/sd_mmc/sd_mmc_mem.h:
+
 ../src/ASF/sam/drivers/pmc/sleep.h:
 
 ../src/ASF/sam/drivers/rtc/rtc.h:
@@ -604,7 +640,15 @@ c:\program\ files\ (x86)\atmel\studio\7.0\toolchain\arm\arm-gnu-toolchain\arm-no
 
 ../src/ASF/sam/boards/same70_xplained/led.h:
 
+../src/ASF/common/components/memory/sd_mmc/sd_mmc.h:
+
+../src/config/conf_sd_mmc.h:
+
+../src/ASF/common/services/spi/sam_spi/spi_master.h:
+
 ../src/ASF/sam/drivers/spi/spi.h:
+
+../src/config/conf_spi_master.h:
 
 ../src/ASF/common/services/sleepmgr/sam/sleepmgr.h:
 

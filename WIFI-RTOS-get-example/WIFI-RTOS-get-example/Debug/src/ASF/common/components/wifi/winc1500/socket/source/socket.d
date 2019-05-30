@@ -151,10 +151,10 @@ src/ASF/common/components/wifi/winc1500/socket/source/socket.d \
  ../src/ASF/common/utils/interrupt.h \
  ../src/ASF/common/utils/interrupt/interrupt_sam_nvic.h \
  ../src/ASF/sam/boards/same70_xplained/same70_xplained.h \
+ ../src/ASF/common/components/wifi/winc1500/driver/include/m2m_types.h \
  ../src/ASF/common/components/wifi/winc1500/driver/source/m2m_hif.h \
  ../src/ASF/common/components/wifi/winc1500/socket/source/socket_internal.h \
- ../src/ASF/common/components/wifi/winc1500/socket/include/m2m_socket_host_if.h \
- ../src/ASF/common/components/wifi/winc1500/driver/include/m2m_types.h
+ ../src/ASF/common/components/wifi/winc1500/socket/include/m2m_socket_host_if.h
 
 ../src/ASF/common/components/wifi/winc1500/bsp/include/nm_bsp.h:
 
@@ -458,10 +458,10 @@ c:\program\ files\ (x86)\atmel\studio\7.0\toolchain\arm\arm-gnu-toolchain\arm-no
 
 ../src/ASF/sam/boards/same70_xplained/same70_xplained.h:
 
+../src/ASF/common/components/wifi/winc1500/driver/include/m2m_types.h:
+
 ../src/ASF/common/components/wifi/winc1500/driver/source/m2m_hif.h:
 
 ../src/ASF/common/components/wifi/winc1500/socket/source/socket_internal.h:
 
 ../src/ASF/common/components/wifi/winc1500/socket/include/m2m_socket_host_if.h:
-
-../src/ASF/common/components/wifi/winc1500/driver/include/m2m_types.h:

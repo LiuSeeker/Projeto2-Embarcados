@@ -156,7 +156,6 @@ src/ASF/common/components/wifi/winc1500/driver/source/nmdrv.d \
  ../src/ASF/common/components/wifi/winc1500/driver/source/nmasic.h \
  ../src/ASF/common/components/wifi/winc1500/driver/include/m2m_types.h \
  ../src/ASF/common/components/wifi/winc1500/spi_flash/include/spi_flash.h \
- ../src/ASF/common/components/wifi/winc1500/spi_flash/include/spi_flash_map.h \
  ../src/ASF/common/components/wifi/winc1500/driver/source/nmspi.h
 
 ../src/ASF/common/components/wifi/winc1500/common/include/nm_common.h:
@@ -470,7 +469,5 @@ c:\program\ files\ (x86)\atmel\studio\7.0\toolchain\arm\arm-gnu-toolchain\arm-no
 ../src/ASF/common/components/wifi/winc1500/driver/include/m2m_types.h:
 
 ../src/ASF/common/components/wifi/winc1500/spi_flash/include/spi_flash.h:
-
-../src/ASF/common/components/wifi/winc1500/spi_flash/include/spi_flash_map.h:
 
 ../src/ASF/common/components/wifi/winc1500/driver/source/nmspi.h:
