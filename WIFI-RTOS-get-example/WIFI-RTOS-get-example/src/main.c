@@ -1,45 +1,4 @@
-#include "asf.h"
-#include "main.h"
-#include <string.h>
-#include "bsp/include/nm_bsp.h"
-#include "driver/include/m2m_wifi.h"
-#include "socket/include/socket.h"
-#include "bme280.h"
-
-#define STRING_EOL    "\r\n"
-#define STRING_HEADER "-- WINC1500 weather client example --"STRING_EOL	\
-"-- "BOARD_NAME " --"STRING_EOL	\
-"-- Compiled: "__DATE__ " "__TIME__ " --"STRING_EOL
-
-#define LED_PIO_ID		  ID_PIOC
-#define LED_PIO         PIOC
-#define LED_PIN		      8
-#define LED_PIN_MASK    (1<<LED_PIN)
-
-#define BUT_PIO_ID            ID_PIOA
-#define BUT_PIO               PIOA
-#define BUT_PIN		            11
-#define BUT_PIN_MASK          (1 << BUT_PIN)
-#define BUT_DEBOUNCING_VALUE  79
-
-#define TWIHS_MCU6050_ID    ID_TWIHS0
-#define TWIHS_MCU6050       TWIHS0
-
-
-#define TASK_WIFI_STACK_SIZE            (4096/sizeof(portSTACK_TYPE))
-#define TASK_WIFI_STACK_PRIORITY        (tskIDLE_PRIORITY)
-
-
-#define TASK_LCD_STACK_SIZE            (10*1024/sizeof(portSTACK_TYPE))
-#define TASK_LCD_STACK_PRIORITY        (tskIDLE_PRIORITY)
-
-#define YEAR 0
-#define MOUNTH 0
-#define DAY 0
-#define WEEK 0
-#define HOUR 0
-#define MINUTE 0
-#define SECOND 0
+#include "includes.h"
 
 /************************************************************************/
 /* VAR globais                                                          */
@@ -100,6 +59,41 @@ SemaphoreHandle_t xSemaphoreRTC;
 void BUT_init(void);
 void LED_init(int estado);
 void pin_toggle(Pio *pio, uint32_t mask);
+extern void vApplicationStackOverflowHook(xTaskHandle *pxTask,signed char *pcTaskName);
+extern void vApplicationIdleHook(void);
+extern void vApplicationTickHook(void);
+extern void vApplicationMallocFailedHook(void);
+extern void xPortSysTickHandler(void);
+static void resolve_cb(uint8_t *hostName, uint32_t hostIp);
+static void wifi_cb(uint8_t u8MsgType, void *pvMsg);
+static void socket_cb(SOCKET sock, uint8_t u8Msg, void *pvMsg);
+static void Button1_Handler(uint32_t id, uint32_t mask);
+static void AFEC_Temp_callback(void);
+void RTC_Handler(void);
+static void configure_console(void);
+int inet_aton(const char *cp, in_addr *ap);
+static void set_dev_name_to_mac(uint8_t *name, uint8_t *mac_addr);
+uint8_t bme280_i2c_read_reg(uint CHIP_ADDRESS, uint reg_address, char *value);
+int8_t bme280_i2c_config_temp(void);
+int8_t bme280_i2c_read_temp(uint *temp);
+int8_t bme280_i2c_read_umi(uint *umi);
+int8_t bme280_i2c_read_press(uint *press);
+uint8_t bme280_validate_id(void);
+static int32_t convert_adc_to_temp(int32_t ADC_value);
+static void config_ADC_TEMP(void);
+void bme280_i2c_bus_init(void);
+void RTC_init();
+static void task_monitor(void *pvParameters);
+static void task_wifi(void *pvParameters);
+static void task_bme(void *pvParameters);
+static void task_presenca(void *pvParameters);
+static void task_co2(void *pvParameters);
+static void task_molhado(void *pvParameters);
+void task_adc(void);
+void task_sd_card(void);
+void CO2_init(void);
+void MOLHADO_init(void);
+void PRESENCA_init(void);
 
 /************************************************************************/
 /* RTOS application funcs                                               */
@@ -262,6 +256,21 @@ static void Button1_Handler(uint32_t id, uint32_t mask)
 {
 	pin_toggle(PIOD, (1<<28));
 	pin_toggle(LED_PIO, LED_PIN_MASK);
+}
+
+static void CO2_Handler(uint32_t id, uint32_t mask)
+{
+	printf("CO2 Handler");
+}
+
+static void PRESENCA_Handler(uint32_t id, uint32_t mask)
+{
+	printf("PresenÃ§a Handler");
+}
+
+static void MOLHADO_Handler(uint32_t id, uint32_t mask)
+{
+	printf("ChÃ£o molhado Handler");
 }
 
 static void AFEC_Temp_callback(void)
@@ -688,14 +697,62 @@ void BUT_init(void){
 	pio_set_input(BUT_PIO, BUT_PIN_MASK, PIO_PULLUP | PIO_DEBOUNCE);
 	
 	/* config. interrupcao em borda de descida no botao do kit */
-	/* indica funcao (but_Handler) a ser chamada quando houver uma interrupção */
+	/* indica funcao (but_Handler) a ser chamada quando houver uma interrupï¿½ï¿½o */
 	pio_enable_interrupt(BUT_PIO, BUT_PIN_MASK);
 	pio_handler_set(BUT_PIO, BUT_PIO_ID, BUT_PIN_MASK, PIO_IT_FALL_EDGE, Button1_Handler);
 	
-	/* habilita interrupçcão do PIO que controla o botao */
+	/* habilita interrupï¿½cï¿½o do PIO que controla o botao */
 	/* e configura sua prioridade                        */
 	NVIC_EnableIRQ(BUT_PIO_ID);
 	NVIC_SetPriority(BUT_PIO_ID, 1);
+};
+
+void CO2_init(void){
+	/* config. pino botao em modo de entrada */
+	pmc_enable_periph_clk(CO2_PIO_ID);
+	pio_set_input(CO2_PIO, CO2_PIN_MASK);
+	
+	/* config. interrupcao em borda de descida no botao do kit */
+	/* indica funcao (CO2_Handler) a ser chamada quando houver uma interrupï¿½ï¿½o */
+	pio_enable_interrupt(CO2_PIO, CO2_PIN_MASK);
+	pio_handler_set(CO2_PIO, CO2_PIO_ID, CO2_PIN_MASK, PIO_IT_FALL_EDGE, CO2_Handler);
+	
+	/* habilita interrupï¿½cï¿½o do PIO que controla o botao */
+	/* e configura sua prioridade                        */
+	NVIC_EnableIRQ(CO2_PIO_ID);
+	NVIC_SetPriority(CO2_PIO_ID, 1);
+};
+
+void MOLHADO_init(void){
+	/* config. pino botao em modo de entrada */
+	pmc_enable_periph_clk(MOLHADO_PIO_ID);
+	pio_set_input(MOLHADO_PIO, MOLHADO_PIN_MASK, PIO_PULLUP | PIO_DEBOUNCE);
+	
+	/* config. interrupcao em borda de descida no botao do kit */
+	/* indica funcao (MOLHADO_Handler) a ser chamada quando houver uma interrupï¿½ï¿½o */
+	pio_enable_interrupt(MOLHADO_PIO, MOLHADO_PIN_MASK);
+	pio_handler_set(MOLHADO_PIO, MOLHADO_PIO_ID, MOLHADO_PIN_MASK, PIO_IT_FALL_EDGE, MOLHADO_Handler);
+	
+	/* habilita interrupï¿½cï¿½o do PIO que controla o botao */
+	/* e configura sua prioridade                        */
+	NVIC_EnableIRQ(MOLHADO_PIO_ID);
+	NVIC_SetPriority(MOLHADO_PIO_ID, 1);
+};
+
+void PRESENCA_init(void){
+	/* config. pino botao em modo de entrada */
+	pmc_enable_periph_clk(PRESENCA_PIO_ID);
+	pio_set_input(PRESENCA_PIO, PRESENCA_PIN_MASK, PIO_PULLUP | PIO_DEBOUNCE);
+	
+	/* config. interrupcao em borda de descida no botao do kit */
+	/* indica funcao (PRESENCA_Handler) a ser chamada quando houver uma interrupï¿½ï¿½o */
+	pio_enable_interrupt(PRESENCA_PIO, PRESENCA_PIN_MASK);
+	pio_handler_set(PRESENCA_PIO, PRESENCA_PIO_ID, PRESENCA_PIN_MASK, PIO_IT_FALL_EDGE, PRESENCA_Handler);
+	
+	/* habilita interrupï¿½cï¿½o do PIO que controla o botao */
+	/* e configura sua prioridade                        */
+	NVIC_EnableIRQ(PRESENCA_PIO_ID);
+	NVIC_SetPriority(PRESENCA_PIO_ID, 1);
 };
 
 void LED_init(int estado){
@@ -894,6 +951,38 @@ static void task_bme(void *pvParameters){
 	
 }
 
+static void task_presenca(void *pvParameters){
+	xQueuePresenca = xQueueCreate(10, sizeof(int32_t));
+	
+	PRESENCA_init();
+	
+	while(1){
+		
+		printf("PRESENCA");
+		vTaskDelay(500/portTICK_PERIOD_MS);
+	}
+}
+
+static void task_co2(void *pvParameters){
+	xQueueCo2 = xQueueCreate(10, sizeof(int32_t));
+	
+	CO2_init();
+	
+	while(1){
+		vTaskDelay(1000/portTICK_PERIOD_MS);
+	}
+}
+
+static void task_molhado(void *pvParameters){
+	xQueueMolhado = xQueueCreate(10, sizeof(int32_t));
+	
+	MOLHADO_init();
+	
+	while(1){
+		vTaskDelay(60000/portTICK_PERIOD_MS);
+	}
+}
+
 void task_adc(void){
 	xQueueAnalog = xQueueCreate( 10, sizeof( int32_t ) );
 	xSemaphoreRTC = xSemaphoreCreateBinary();
@@ -1030,19 +1119,24 @@ int main(void)
 	/* Configura Leds */
 	LED_init(1);
 	
-	/* Configura os botões */
+	/* Configura os botï¿½es */
 	BUT_init();
 	
-	if (xTaskCreate(task_wifi, "Wifi", TASK_WIFI_STACK_SIZE, NULL,
-	TASK_WIFI_STACK_PRIORITY, NULL) != pdPASS) {
-	printf("Failed to create Wifi task\r\n");
+	if (xTaskCreate(task_wifi, "Wifi", TASK_WIFI_STACK_SIZE, NULL,TASK_WIFI_STACK_PRIORITY, NULL) != pdPASS) {
+		printf("Failed to create Wifi task\r\n");
 	}
-	
-	if (xTaskCreate(task_bme, "bme", TASK_WIFI_STACK_SIZE, NULL,
-	TASK_WIFI_STACK_PRIORITY, NULL) != pdPASS) {
-	printf("Failed to create Wifi task\r\n");
+	if (xTaskCreate(task_bme, "bme", TASK_WIFI_STACK_SIZE, NULL,TASK_WIFI_STACK_PRIORITY, NULL) != pdPASS) {
+		printf("Failed to create BME task\r\n");
 	}
-
+	if (xTaskCreate(task_molhado, "molhado", TASK_WIFI_STACK_SIZE, NULL,TASK_WIFI_STACK_PRIORITY, NULL) != pdPASS) {
+		printf("Failed to create Molhado task\r\n");
+	}
+	if (xTaskCreate(task_co2, "CO2", TASK_WIFI_STACK_SIZE, NULL,TASK_WIFI_STACK_PRIORITY, NULL) != pdPASS) {
+		printf("Failed to create CO2 task\r\n");
+	}
+	if (xTaskCreate(task_presenca, "Presenca", TASK_WIFI_STACK_SIZE, NULL,TASK_WIFI_STACK_PRIORITY, NULL) != pdPASS) {
+		printf("Failed to create Presenï¿½a task\r\n");
+	}
 	/* Create task to handler LCD */
 	if (xTaskCreate(task_adc, "adc", TASK_LCD_STACK_SIZE, NULL, TASK_LCD_STACK_PRIORITY, NULL) != pdPASS) {
 		printf("Failed to create test adc task\r\n");
