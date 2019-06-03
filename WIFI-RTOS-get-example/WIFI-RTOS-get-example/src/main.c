@@ -197,9 +197,9 @@ static void wifi_cb(uint8_t u8MsgType, void *pvMsg)
 
 static void socket_cb(SOCKET sock, uint8_t u8Msg, void *pvMsg)
 {
-	
 	/* Check for socket event on TCP socket. */
 	if (sock == tcp_client_socket) {
+		
 		
 		switch (u8Msg) {
 			case SOCKET_MSG_CONNECT:
@@ -583,6 +583,101 @@ static void config_ADC_TEMP(void){
 	afec_channel_enable(AFEC0, AFEC_CHANNEL_TEMP_SENSOR);
 }
 
+int8_t bme280_i2c_read_compensation_T(ushort *temp, uint reg1, uint reg2)
+{
+	
+	int32_t ierror = 0x00;
+	char tmp[3];
+	
+	bme280_i2c_read_reg(BME280_ADDRESS, reg2, &tmp[2]);
+	bme280_i2c_read_reg(BME280_ADDRESS, reg2, &tmp[2]);
+	
+	bme280_i2c_read_reg(BME280_ADDRESS, reg1, &tmp[1]);
+	bme280_i2c_read_reg(BME280_ADDRESS, reg1, &tmp[1]);
+
+	*temp = tmp[2] << 8 | tmp[1];
+	return 0;
+}
+
+int8_t bme280_i2c_read_compensation_P(ushort *press, uint reg1, uint reg2)
+{
+	
+	int32_t ierror = 0x00;
+	char tmp[3];
+	
+	bme280_i2c_read_reg(BME280_ADDRESS, reg2, &tmp[2]);
+	bme280_i2c_read_reg(BME280_ADDRESS, reg2, &tmp[2]);
+	
+	bme280_i2c_read_reg(BME280_ADDRESS, reg1, &tmp[1]);
+	bme280_i2c_read_reg(BME280_ADDRESS, reg1, &tmp[1]);
+
+	*press = tmp[2] << 8 | tmp[1];
+	return 0;
+}
+
+int8_t bme280_i2c_read_compensation_H(ushort *umi, uint reg1, uint reg2)
+{
+	
+	int32_t ierror = 0x00;
+	char tmp[3];
+	
+	bme280_i2c_read_reg(BME280_ADDRESS, reg2, &tmp[2]);
+	bme280_i2c_read_reg(BME280_ADDRESS, reg2, &tmp[2]);
+	
+	bme280_i2c_read_reg(BME280_ADDRESS, reg1, &tmp[1]);
+	bme280_i2c_read_reg(BME280_ADDRESS, reg1, &tmp[1]);
+
+	*umi = tmp[2] << 8 | tmp[1];
+	return 0;
+}
+
+int32_t t_fine;
+int32_t BME280_compensate_T_int32(int32_t adc_T, ushort dig_T1, short dig_T2, short dig_T3)
+{
+	int32_t var1, var2, T;
+	var1 = ((((adc_T>>3) - ((int32_t)dig_T1<<1))) * ((int32_t)dig_T2)) >> 11;
+	var2 = (((((adc_T>>4) - ((int32_t)dig_T1)) * ((adc_T>>4) - ((int32_t)dig_T1))) >> 12) *
+	((int32_t)dig_T3)) >> 14;
+	t_fine = var1 + var2;
+	T = (t_fine * 5 + 128) >> 8;
+	return T;
+}
+
+int32_t BME280_compensate_P_int64(int32_t adc_P, ushort dig_P1, short dig_P2, short dig_P3, short dig_P4, short dig_P5, short dig_P6, short dig_P7, short dig_P8, short dig_P9)
+{
+	int32_t var1, var2, p;
+	var1 = ((int32_t)t_fine) - 128000;
+	var2 = var1 * var1 * (int32_t)dig_P6;
+	var2 = var2 + ((var1*(int32_t)dig_P5)<<17);
+	var2 = var2 + (((int32_t)dig_P4)<<35);
+	var1 = ((var1 * var1 * (int32_t)dig_P3)>>8) + ((var1 * (int32_t)dig_P2)<<12);
+	var1 = (((((int32_t)1)<<47)+var1))*((int32_t)dig_P1)>>33;
+	if (var1 == 0)
+	{
+		return 0; // avoid exception caused by division by zero
+	}
+	p = 1048576-adc_P;
+	p = (((p<<31)-var2)*3125)/var1;
+	var1 = (((int32_t)dig_P9) * (p>>13) * (p>>13)) >> 25;
+	var2 = (((int32_t)dig_P8) * p) >> 19;
+	p = ((p + var1 + var2) >> 8) + (((int32_t)dig_P7)<<4);
+	return (int32_t)p;
+}
+
+int32_t bme280_compensate_H_int32(int32_t adc_H, short dig_H1, short dig_H2, short dig_H3, short dig_H4, short dig_H5, short dig_H6)
+{
+	int32_t v_x1_u32r;
+	v_x1_u32r = (t_fine - ((int32_t)76800));
+	v_x1_u32r = (((((adc_H << 14) - (((int32_t)dig_H4) << 20) - (((int32_t)dig_H5) * v_x1_u32r)) +
+	((int32_t)16384)) >> 15) * (((((((v_x1_u32r * ((int32_t)dig_H6)) >> 10) * (((v_x1_u32r *
+	((int32_t)dig_H3)) >> 11) + ((int32_t)32768))) >> 10) + ((int32_t)2097152)) *
+	((int32_t)dig_H2) + 8192) >> 14));
+	v_x1_u32r = (v_x1_u32r - (((((v_x1_u32r >> 15) * (v_x1_u32r >> 15)) >> 7) * ((int32_t)dig_H1)) >> 4));
+	v_x1_u32r = (v_x1_u32r < 0 ? 0 : v_x1_u32r);
+	v_x1_u32r = (v_x1_u32r > 419430400 ? 419430400 : v_x1_u32r);
+	return (int32_t)(v_x1_u32r>>12);
+}
+
 /************************************************************************/
 /* inits                                                                */
 /************************************************************************/
@@ -717,7 +812,8 @@ static void task_wifi(void *pvParameters) {
 					close(tcp_client_socket);
 					tcp_client_socket = -1;
 					printf("error\n");
-					}else{
+				}else{
+					printf("CONECTADO no socket");
 					gbTcpConnection = true;
 				}
 			}
@@ -735,6 +831,9 @@ static void task_bme(void *pvParameters){
 	
 	Bool validado = false;
 	uint temperatura, pressao, umidade;
+	int32_t dig_T1, dig_T2, dig_T3;
+	int32_t dig_P1, dig_P2, dig_P3, dig_P4, dig_P5, dig_P6, dig_P7, dig_P8, dig_P9;
+	int32_t dig_H1, dig_H2, dig_H3, dig_H4, dig_H5, dig_H6;
 	
 	while(1){
 		if(bme280_validate_id()){
@@ -744,24 +843,49 @@ static void task_bme(void *pvParameters){
 		else if (!validado){
 			validado = true;
 			bme280_i2c_config_temp();
+			
+			bme280_i2c_read_compensation_T(&dig_T1, BME280_DIG_T1_LSB_REG, BME280_DIG_T1_MSB_REG);
+			bme280_i2c_read_compensation_T(&dig_T2, BME280_DIG_T2_LSB_REG, BME280_DIG_T2_MSB_REG);
+			bme280_i2c_read_compensation_T(&dig_T3, BME280_DIG_T3_LSB_REG, BME280_DIG_T3_MSB_REG);
+			
+			bme280_i2c_read_compensation_P(&dig_P1, BME280_DIG_P1_LSB_REG, BME280_DIG_P1_MSB_REG);
+			bme280_i2c_read_compensation_P(&dig_P2, BME280_DIG_P2_LSB_REG, BME280_DIG_P2_MSB_REG);
+			bme280_i2c_read_compensation_P(&dig_P3, BME280_DIG_P3_LSB_REG, BME280_DIG_P3_MSB_REG);
+			bme280_i2c_read_compensation_P(&dig_P4, BME280_DIG_P4_LSB_REG, BME280_DIG_P4_MSB_REG);
+			bme280_i2c_read_compensation_P(&dig_P5, BME280_DIG_P5_LSB_REG, BME280_DIG_P5_MSB_REG);
+			bme280_i2c_read_compensation_P(&dig_P6, BME280_DIG_P6_LSB_REG, BME280_DIG_P6_MSB_REG);
+			bme280_i2c_read_compensation_P(&dig_P7, BME280_DIG_P7_LSB_REG, BME280_DIG_P7_MSB_REG);
+			bme280_i2c_read_compensation_P(&dig_P8, BME280_DIG_P8_LSB_REG, BME280_DIG_P8_MSB_REG);
+			bme280_i2c_read_compensation_P(&dig_P9, BME280_DIG_P9_LSB_REG, BME280_DIG_P9_MSB_REG);
+			
+			bme280_i2c_read_compensation_H(&dig_H1, BME280_DIG_H1_REG, BME280_DIG_H1_REG);
+			bme280_i2c_read_compensation_H(&dig_H2, BME280_DIG_H2_LSB_REG, BME280_DIG_H2_MSB_REG);
+			bme280_i2c_read_compensation_H(&dig_H3, BME280_DIG_H3_REG, BME280_DIG_H3_REG);
+			bme280_i2c_read_compensation_H(&dig_H4, BME280_DIG_H4_LSB_REG, BME280_DIG_H4_MSB_REG);
+			bme280_i2c_read_compensation_H(&dig_H5, BME280_DIG_H5_MSB_REG, BME280_DIG_H5_MSB_REG);
+			bme280_i2c_read_compensation_H(&dig_H6, BME280_DIG_H6_REG, BME280_DIG_H6_REG);
 		}
+		
 		if(validado){
 			if (bme280_i2c_read_temp(&temperatura)){
 				printf("erro ao ler temperatura \n");
 			}
 			else{
+				temperatura = BME280_compensate_T_int32((int32_t)temperatura << 4, dig_T1, dig_T2, dig_T3);
 				printf("Temperatura: %d \n", temperatura);
 			}
 			if (bme280_i2c_read_press(&pressao)){
 				printf("erro ao ler pressao \n");
 			}
 			else{
+				//pressao = BME280_compensate_P_int64((int32_t)pressao << 4, dig_P1, dig_P2, dig_P3, dig_P4, dig_P5, dig_P6, dig_P7, dig_P8, dig_P9);
 				printf("Pressao: %d \n", pressao);
 			}
 			if (bme280_i2c_read_umi(&umidade)){
 				printf("erro ao ler umidade \n");
 			}
 			else{
+				//umidade = bme280_compensate_H_int32((int32_t)umidade << 4, dig_H1, dig_H2, dig_H3, dig_H4, dig_H5, dig_H6);
 				printf("Umidade: %d \n", umidade);
 			}
 		}
@@ -769,12 +893,6 @@ static void task_bme(void *pvParameters){
 	}
 	
 }
-
-
-
-
-
-
 
 void task_adc(void){
 	xQueueAnalog = xQueueCreate( 10, sizeof( int32_t ) );
@@ -787,7 +905,6 @@ void task_adc(void){
 	afec_start_software_conversion(AFEC0);
 	data d;
 	int32_t adcVal;
-	printf("\nentrou na task adc\n");
 	RTC_init();
 	char clock_buffer[100];
 
@@ -799,7 +916,7 @@ void task_adc(void){
 			
 		}
 		if (xQueueReceive( xQueueAnalog, &(adcVal), ( TickType_t )  10 / portTICK_PERIOD_MS)) {
-			data d = {D_TYPE_TEMP, convert_adc_to_temp(adcVal), clock_buffer};
+			data d = {D_TYPE_TEMP, adcVal, clock_buffer};
 			afec_start_software_conversion(AFEC0);
 			xQueueSend( xQueueSDCard, &d, 0);
 
@@ -809,6 +926,7 @@ void task_adc(void){
 
 	}
 }
+
 void task_sd_card(void){
 	//xQueueSDCard = xQueueCreate( 10, sizeof( int32_t ) );
 	xQueueSDCard = xQueueCreate( 10, sizeof( data ) );
