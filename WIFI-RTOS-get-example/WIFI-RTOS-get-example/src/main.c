@@ -82,8 +82,19 @@ void pin_toggle(Pio *pio, uint32_t mask);
 
 /* Canal do sensor de temperatura */
 #define AFEC_CHANNEL_TEMP_SENSOR 0
+
 QueueHandle_t xQueueAnalog;
 QueueHandle_t xQueueSDCard;
+
+SemaphoreHandle_t xSemaphoreRTC;
+
+#define YEAR 0
+#define MOUNTH 0
+#define DAY 0
+#define WEEK 0
+#define HOUR 0
+#define MINUTE 0
+#define SECOND 0
 
 
 /************************************************************************/
@@ -390,7 +401,7 @@ int8_t bme280_i2c_config_temp(void){
 	if(twihs_master_write(TWIHS_MCU6050, &p_packet) != TWIHS_SUCCESS){
 		return 1;
 	}
-		
+	
 	delay_ms(10);
 	
 	twihs_packet_t p_packet2;
@@ -401,7 +412,7 @@ int8_t bme280_i2c_config_temp(void){
 	char data2 = 0b00000001; //BME280_CHIP_ID_REG;
 	p_packet2.buffer       = &data2;
 	p_packet2.length       = 1;
-		
+	
 	if(twihs_master_write(TWIHS_MCU6050, &p_packet2) != TWIHS_SUCCESS){
 		return 1;
 	}
@@ -498,6 +509,54 @@ void bme280_i2c_bus_init(void)
 	bno055_option.master_clk = sysclk_get_cpu_hz();
 	bno055_option.speed      = 10000;
 	twihs_master_init(TWIHS_MCU6050, &bno055_option);
+}
+
+void RTC_init() {
+	/* Configura o PMC */
+	pmc_enable_periph_clk(ID_RTC);
+
+	/* Default RTC configuration, 24-hour mode */
+	rtc_set_hour_mode(RTC, 0);
+
+	/* Configura data e hora manualmente */
+	rtc_set_date(RTC, YEAR, MOUNTH, DAY, WEEK);
+	rtc_set_time(RTC, HOUR, MINUTE, SECOND);
+
+	/* Configure RTC interrupts */
+	NVIC_DisableIRQ(RTC_IRQn);
+	NVIC_ClearPendingIRQ(RTC_IRQn);
+	NVIC_SetPriority(RTC_IRQn, 5);
+	NVIC_EnableIRQ(RTC_IRQn);
+
+	/* Ativa interrupcao via alarme */
+	//	rtc_enable_interrupt(RTC, RTC_IER_ALREN);
+	rtc_enable_interrupt(RTC, RTC_IER_SECEN);
+}
+
+void RTC_Handler(void) {
+	uint32_t ul_status = rtc_get_status(RTC);
+	uint16_t hour;
+	uint16_t m;
+	uint16_t se;
+
+	//INTERRUP??O POR SEGUNDO
+	if ((ul_status & RTC_SR_SEC) == RTC_SR_SEC) {
+		rtc_clear_status(RTC, RTC_SCCR_SECCLR);
+		BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+
+		xSemaphoreGiveFromISR(xSemaphoreRTC, NULL);
+	}
+
+	//INTERRUP??O POR ALARME
+	if ((ul_status & RTC_SR_ALARM) == RTC_SR_ALARM) {
+
+		rtc_clear_status(RTC, RTC_SCCR_ALRCLR);
+	}
+
+	rtc_clear_status(RTC, RTC_SCCR_ACKCLR);
+	rtc_clear_status(RTC, RTC_SCCR_TIMCLR);
+	rtc_clear_status(RTC, RTC_SCCR_CALCLR);
+	rtc_clear_status(RTC, RTC_SCCR_TDERRCLR);
 }
 
 /************************************************************************/
@@ -703,24 +762,34 @@ static void config_ADC_TEMP(void){
 
 void task_adc(void){
 	xQueueAnalog = xQueueCreate( 10, sizeof( int32_t ) );
+	xSemaphoreRTC = xSemaphoreCreateBinary();
 
+	uint8_t second;
+	uint8_t minute;
+	uint8_t hour;
 	config_ADC_TEMP();
 	afec_start_software_conversion(AFEC0);
-	int32_t adcVal;
 	data d;
-	int32_t tempVal;
+	int32_t adcVal;
 	printf("\nentrou na task adc\n");
+	RTC_init();
+	char clock_buffer[100];
 
 	while (true) {
-		
+		if (xSemaphoreTake(xSemaphoreRTC, (TickType_t)10 / portTICK_PERIOD_MS)) {
+			rtc_get_time(RTC, &hour, &minute, &second);
+			
+			sprintf(clock_buffer, "H: %02d M: %02d S: %02d", hour, minute, second);
+			
+		}
 		if (xQueueReceive( xQueueAnalog, &(adcVal), ( TickType_t )  10 / portTICK_PERIOD_MS)) {
-			data d = {D_TYPE_TEMP, convert_adc_to_temp(adcVal), 983019283};
+			data d = {D_TYPE_TEMP, convert_adc_to_temp(adcVal), clock_buffer};
 			afec_start_software_conversion(AFEC0);
 			xQueueSend( xQueueSDCard, &d, 0);
 
 		}
 
-		vTaskDelay(1000/portTICK_PERIOD_MS);
+		vTaskDelay(100/portTICK_PERIOD_MS);
 
 	}
 }
@@ -832,12 +901,12 @@ int main(void)
 	//
 	//if (xTaskCreate(task_wifi, "Wifi", TASK_WIFI_STACK_SIZE, NULL,
 	//TASK_WIFI_STACK_PRIORITY, NULL) != pdPASS) {
-		//printf("Failed to create Wifi task\r\n");
+	//printf("Failed to create Wifi task\r\n");
 	//}
 	//
 	//if (xTaskCreate(task_bme, "bme", TASK_WIFI_STACK_SIZE, NULL,
 	//TASK_WIFI_STACK_PRIORITY, NULL) != pdPASS) {
-		//printf("Failed to create Wifi task\r\n");
+	//printf("Failed to create Wifi task\r\n");
 	//}
 
 	/* Create task to handler LCD */

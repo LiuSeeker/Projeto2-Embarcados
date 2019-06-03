@@ -36,14 +36,14 @@ static uint8_t gacDeviceName[] = MAIN_M2M_DEVICE_NAME;
 #define MAIN_HEX2ASCII(x)                   (((x) >= 10) ? (((x) - 10) + 'A') : ((x) + '0'))
 
 
-#define D_TYPE_TEMP "Timestamp: %d -> Temp: %d\n"
-#define D_TYPE_HUMIDITY "Timestamp: %d -> Humidity: %d\n"
-#define D_TYPE_PRESSURE "Timestamp: %d -> Pressure: %d\n"
-#define D_TYPE_SMOKE "Timestamp: %d -> CO2: %d\n"
+#define D_TYPE_TEMP "Timestamp: %s -> Temp: %d\n"
+#define D_TYPE_HUMIDITY "Timestamp: %s -> Humidity: %d\n"
+#define D_TYPE_PRESSURE "Timestamp: %s -> Pressure: %d\n"
+#define D_TYPE_SMOKE "Timestamp: %s -> CO2: %d\n"
 typedef struct{
 	char type[50];
 	int32_t value;
-	int32_t timestamp;
+	char *timestamp;
 } data;
 
 
