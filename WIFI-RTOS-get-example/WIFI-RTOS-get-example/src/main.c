@@ -49,8 +49,10 @@ QueueHandle_t xQueueUmi;
 QueueHandle_t xQueueCo;
 QueueHandle_t xQueuePresen;
 QueueHandle_t xQueueMolhado;
+QueueHandle_t xQueueBuz;
 
 SemaphoreHandle_t xSemaphoreRTC;
+
 
 /************************************************************************/
 /* PROTOTYPES                                                           */
@@ -58,7 +60,7 @@ SemaphoreHandle_t xSemaphoreRTC;
 
 void BUT_init(void);
 void LED_init(int estado);
-void pin_toggle(Pio *pio, uint32_t mask);
+//void pin_toggle(Pio *pio, uint32_t mask);
 extern void vApplicationStackOverflowHook(xTaskHandle *pxTask,signed char *pcTaskName);
 extern void vApplicationIdleHook(void);
 extern void vApplicationTickHook(void);
@@ -192,6 +194,7 @@ static void wifi_cb(uint8_t u8MsgType, void *pvMsg)
 static void socket_cb(SOCKET sock, uint8_t u8Msg, void *pvMsg)
 {
 	/* Check for socket event on TCP socket. */
+	int flag_temp = 0;
 	if (sock == tcp_client_socket) {
 		
 		
@@ -206,10 +209,18 @@ static void socket_cb(SOCKET sock, uint8_t u8Msg, void *pvMsg)
 					tstrSocketConnectMsg *pstrConnect = (tstrSocketConnectMsg *)pvMsg;
 					if (pstrConnect && pstrConnect->s8Error >= SOCK_ERR_NO_ERROR) {
 						printf("send \n");
-						send(tcp_client_socket, gau8ReceivedBuffer, strlen((char *)gau8ReceivedBuffer), 0);
+						if(xQueueReceive(xQueueTemp, &flag_temp, ( TickType_t )  5000 / portTICK_PERIOD_MS)){
+							send(tcp_client_socket, gau8ReceivedBuffer, strlen((char *)gau8ReceivedBuffer), 0);
 
-						memset(gau8ReceivedBuffer, 0, MAIN_WIFI_M2M_BUFFER_SIZE);
-						recv(tcp_client_socket, &gau8ReceivedBuffer[0], MAIN_WIFI_M2M_BUFFER_SIZE, 0);
+							memset(gau8ReceivedBuffer, 0, MAIN_WIFI_M2M_BUFFER_SIZE);
+							recv(tcp_client_socket, &gau8ReceivedBuffer[0], MAIN_WIFI_M2M_BUFFER_SIZE, 0);
+						}
+						else {
+						printf("socket_cb: Nada pra enviar !\r\n");
+						gbTcpConnection = false;
+						close(tcp_client_socket);
+						tcp_client_socket = -1;
+					}
 					}
 					else {
 						printf("socket_cb: connect error!\r\n");
@@ -254,8 +265,8 @@ static void socket_cb(SOCKET sock, uint8_t u8Msg, void *pvMsg)
 
 static void Button1_Handler(uint32_t id, uint32_t mask)
 {
-	pin_toggle(PIOD, (1<<28));
-	pin_toggle(LED_PIO, LED_PIN_MASK);
+	int flag = 1;
+	//xQueueSendFromISR(xQueueBuz, &flag, 0);
 }
 
 static void CO2_Handler(uint32_t id, uint32_t mask)
@@ -640,6 +651,35 @@ int8_t bme280_i2c_read_compensation_H(ushort *umi, uint reg1, uint reg2)
 	return 0;
 }
 
+int8_t bme280_i2c_read_compensation_H2(ushort *umi, uint reg1, uint reg2)
+{
+	
+	int32_t ierror = 0x00;
+	char tmp[3];
+	
+	bme280_i2c_read_reg(BME280_ADDRESS, reg2, &tmp[2]);
+	bme280_i2c_read_reg(BME280_ADDRESS, reg2, &tmp[2]);
+	
+	bme280_i2c_read_reg(BME280_ADDRESS, reg1, &tmp[1]);
+	bme280_i2c_read_reg(BME280_ADDRESS, reg1, &tmp[1]);
+
+	*umi = tmp[2] << 4 | (tmp[1] << 12) >> 12;
+	return 0;
+}
+
+int8_t bme280_i2c_read_compensation_H_lower(uint8_t *umi, uint reg)
+{
+	
+	int32_t ierror = 0x00;
+	uint8_t out;
+	
+	bme280_i2c_read_reg(BME280_ADDRESS, reg, &out);
+	bme280_i2c_read_reg(BME280_ADDRESS, reg, &out);
+	
+	*umi = out;
+	return 0;
+}
+
 int32_t t_fine;
 int32_t BME280_compensate_T_int32(int32_t adc_T, ushort dig_T1, short dig_T2, short dig_T3)
 {
@@ -652,28 +692,28 @@ int32_t BME280_compensate_T_int32(int32_t adc_T, ushort dig_T1, short dig_T2, sh
 	return T;
 }
 
-int32_t BME280_compensate_P_int64(int32_t adc_P, ushort dig_P1, short dig_P2, short dig_P3, short dig_P4, short dig_P5, short dig_P6, short dig_P7, short dig_P8, short dig_P9)
+uint32_t BME280_compensate_P_int64(int32_t adc_P, ushort dig_P1, short dig_P2, short dig_P3, short dig_P4, short dig_P5, short dig_P6, short dig_P7, short dig_P8, short dig_P9)
 {
-	int32_t var1, var2, p;
-	var1 = ((int32_t)t_fine) - 128000;
-	var2 = var1 * var1 * (int32_t)dig_P6;
-	var2 = var2 + ((var1*(int32_t)dig_P5)<<17);
-	var2 = var2 + (((int32_t)dig_P4)<<35);
-	var1 = ((var1 * var1 * (int32_t)dig_P3)>>8) + ((var1 * (int32_t)dig_P2)<<12);
-	var1 = (((((int32_t)1)<<47)+var1))*((int32_t)dig_P1)>>33;
+	int64_t var1, var2, p;
+	var1 = ((int64_t)t_fine) - 128000;
+	var2 = var1 * var1 * (int64_t)dig_P6;
+	var2 = var2 + ((var1*(int64_t)dig_P5)<<17);
+	var2 = var2 + (((int64_t)dig_P4)<<35);
+	var1 = ((var1 * var1 * (int64_t)dig_P3)>>8) + ((var1 * (int64_t)dig_P2)<<12);
+	var1 = (((((int64_t)1)<<47)+var1))*((int64_t)dig_P1)>>33;
 	if (var1 == 0)
 	{
 		return 0; // avoid exception caused by division by zero
 	}
 	p = 1048576-adc_P;
 	p = (((p<<31)-var2)*3125)/var1;
-	var1 = (((int32_t)dig_P9) * (p>>13) * (p>>13)) >> 25;
-	var2 = (((int32_t)dig_P8) * p) >> 19;
-	p = ((p + var1 + var2) >> 8) + (((int32_t)dig_P7)<<4);
-	return (int32_t)p;
+	var1 = (((int64_t)dig_P9) * (p>>13) * (p>>13)) >> 25;
+	var2 = (((int64_t)dig_P8) * p) >> 19;
+	p = ((p + var1 + var2) >> 8) + (((int64_t)dig_P7)<<4);
+	return (uint32_t)p;
 }
 
-int32_t bme280_compensate_H_int32(int32_t adc_H, short dig_H1, short dig_H2, short dig_H3, short dig_H4, short dig_H5, short dig_H6)
+uint32_t bme280_compensate_H_int32(int32_t adc_H, uint8_t dig_H1, short dig_H2, uint8_t dig_H3, short dig_H4, short dig_H5, int8_t dig_H6)
 {
 	int32_t v_x1_u32r;
 	v_x1_u32r = (t_fine - ((int32_t)76800));
@@ -684,7 +724,7 @@ int32_t bme280_compensate_H_int32(int32_t adc_H, short dig_H1, short dig_H2, sho
 	v_x1_u32r = (v_x1_u32r - (((((v_x1_u32r >> 15) * (v_x1_u32r >> 15)) >> 7) * ((int32_t)dig_H1)) >> 4));
 	v_x1_u32r = (v_x1_u32r < 0 ? 0 : v_x1_u32r);
 	v_x1_u32r = (v_x1_u32r > 419430400 ? 419430400 : v_x1_u32r);
-	return (int32_t)(v_x1_u32r>>12);
+	return (uint32_t)(v_x1_u32r>>12);
 }
 
 /************************************************************************/
@@ -704,13 +744,13 @@ void BUT_init(void){
 	/* habilita interrup�c�o do PIO que controla o botao */
 	/* e configura sua prioridade                        */
 	NVIC_EnableIRQ(BUT_PIO_ID);
-	NVIC_SetPriority(BUT_PIO_ID, 1);
+	NVIC_SetPriority(BUT_PIO_ID, 0);
 };
 
 void CO2_init(void){
 	/* config. pino botao em modo de entrada */
 	pmc_enable_periph_clk(CO2_PIO_ID);
-	pio_set_input(CO2_PIO, CO2_PIN_MASK);
+	pio_set_input(CO2_PIO, CO2_PIN_MASK, PIO_PULLUP | PIO_DEBOUNCE);
 	
 	/* config. interrupcao em borda de descida no botao do kit */
 	/* indica funcao (CO2_Handler) a ser chamada quando houver uma interrup��o */
@@ -793,8 +833,10 @@ void RTC_init() {
 	rtc_enable_interrupt(RTC, RTC_IER_SECEN);
 }
 
-
-
+void BUZ_init(void){
+	pmc_enable_periph_clk(BUZ_PIO_ID);
+	pio_set_output(BUZ_PIO, BUZ_PIN_MASK, 0, 0, 0);
+}
 /************************************************************************/
 /* TASKS                                                                */
 /************************************************************************/
@@ -915,35 +957,45 @@ static void task_bme(void *pvParameters){
 			bme280_i2c_read_compensation_P(&dig_P8, BME280_DIG_P8_LSB_REG, BME280_DIG_P8_MSB_REG);
 			bme280_i2c_read_compensation_P(&dig_P9, BME280_DIG_P9_LSB_REG, BME280_DIG_P9_MSB_REG);
 			
-			bme280_i2c_read_compensation_H(&dig_H1, BME280_DIG_H1_REG, BME280_DIG_H1_REG);
+			bme280_i2c_read_compensation_H_lower(&dig_H1, BME280_DIG_H1_REG);
 			bme280_i2c_read_compensation_H(&dig_H2, BME280_DIG_H2_LSB_REG, BME280_DIG_H2_MSB_REG);
-			bme280_i2c_read_compensation_H(&dig_H3, BME280_DIG_H3_REG, BME280_DIG_H3_REG);
+			bme280_i2c_read_compensation_H_lower(&dig_H3, BME280_DIG_H3_REG);
 			bme280_i2c_read_compensation_H(&dig_H4, BME280_DIG_H4_LSB_REG, BME280_DIG_H4_MSB_REG);
-			bme280_i2c_read_compensation_H(&dig_H5, BME280_DIG_H5_MSB_REG, BME280_DIG_H5_MSB_REG);
-			bme280_i2c_read_compensation_H(&dig_H6, BME280_DIG_H6_REG, BME280_DIG_H6_REG);
+			short aux = ((dig_H4 & 0x00FF) << 4) | (((dig_H4 & 0xFF00) >> 12) & 0b1111);
+			dig_H4 = aux;
+			bme280_i2c_read_compensation_H(&dig_H5, BME280_DIG_H4_LSB_REG, BME280_DIG_H5_MSB_REG);
+			aux = ((dig_H5 & 0xFF00) >> 4) | (dig_H5 & 0xb1111);
+			dig_H5 = aux;
+			bme280_i2c_read_compensation_H_lower(&dig_H6, BME280_DIG_H6_REG);
 		}
-		
+		uint32_t flag = 1;
 		if(validado){
 			if (bme280_i2c_read_temp(&temperatura)){
 				printf("erro ao ler temperatura \n");
 			}
 			else{
-				temperatura = BME280_compensate_T_int32((int32_t)temperatura << 4, dig_T1, dig_T2, dig_T3);
-				printf("Temperatura: %d \n", temperatura);
+				temperatura = BME280_compensate_T_int32((int32_t)temperatura << 4, dig_T1, dig_T2, dig_T3)/100;
+				printf("Temperatura: %d C\n", temperatura);
+				if(temperatura >= 30){
+					xQueueSend(xQueueTemp, &flag, 0);
+					xQueueSend(xQueueBuz, &flag, 0);
+				}
 			}
+			
 			if (bme280_i2c_read_press(&pressao)){
 				printf("erro ao ler pressao \n");
 			}
 			else{
-				//pressao = BME280_compensate_P_int64((int32_t)pressao << 4, dig_P1, dig_P2, dig_P3, dig_P4, dig_P5, dig_P6, dig_P7, dig_P8, dig_P9);
-				printf("Pressao: %d \n", pressao);
+				pressao = BME280_compensate_P_int64((int32_t)pressao << 4, dig_P1, dig_P2, dig_P3, dig_P4, dig_P5, dig_P6, dig_P7, dig_P8, dig_P9);
+				printf("Pressao: %u Pa\n", pressao/256);
 			}
+			
 			if (bme280_i2c_read_umi(&umidade)){
 				printf("erro ao ler umidade \n");
 			}
 			else{
-				//umidade = bme280_compensate_H_int32((int32_t)umidade << 4, dig_H1, dig_H2, dig_H3, dig_H4, dig_H5, dig_H6);
-				printf("Umidade: %d \n", umidade);
+				umidade = bme280_compensate_H_int32((int32_t)umidade << 4, dig_H1, dig_H2, dig_H3, dig_H4, dig_H5, dig_H6)/1024;
+				printf("Umidade: %u %%\n", umidade);
 			}
 		}
 		vTaskDelay(5000/portTICK_PERIOD_MS);
@@ -952,24 +1004,25 @@ static void task_bme(void *pvParameters){
 }
 
 static void task_presenca(void *pvParameters){
-	xQueuePresenca = xQueueCreate(10, sizeof(int32_t));
+	xQueuePresen = xQueueCreate(10, sizeof(int32_t));
 	
 	PRESENCA_init();
 	
 	while(1){
 		
-		printf("PRESENCA");
-		vTaskDelay(500/portTICK_PERIOD_MS);
+		printf("task PRESENCA\n");
+		vTaskDelay(5000/portTICK_PERIOD_MS);
 	}
 }
 
 static void task_co2(void *pvParameters){
-	xQueueCo2 = xQueueCreate(10, sizeof(int32_t));
+	xQueueCo = xQueueCreate(10, sizeof(int32_t));
 	
 	CO2_init();
 	
 	while(1){
-		vTaskDelay(1000/portTICK_PERIOD_MS);
+		printf("task CO2\n");
+		vTaskDelay(5000/portTICK_PERIOD_MS);
 	}
 }
 
@@ -979,7 +1032,8 @@ static void task_molhado(void *pvParameters){
 	MOLHADO_init();
 	
 	while(1){
-		vTaskDelay(60000/portTICK_PERIOD_MS);
+		printf("task molahdo\n");
+		vTaskDelay(6000/portTICK_PERIOD_MS);
 	}
 }
 
@@ -1092,6 +1146,37 @@ void task_sd_card(void){
 	}
 }
 
+void task_buz(void){
+	Bool alarm = false;
+	xQueueBuz = xQueueCreate(10, sizeof(int));
+	
+	int flag_buz = 0;
+	
+	while (true){
+		if(xQueueReceive(xQueueBuz, &flag_buz, ( TickType_t )  500 / portTICK_PERIOD_MS)){
+			if(flag_buz){
+				if(!alarm){
+					pin_toggle(LED_PIO, LED_PIN_MASK);
+					pio_set(PIOA, BUZ_PIN_MASK);
+					alarm = true;
+				}
+			}
+			if(flag_buz == 0){
+				if(alarm){
+					pio_set(PIOA, BUZ_PIN_MASK);
+					pin_toggle(LED_PIO, LED_PIN_MASK);
+					alarm = false;
+				}
+				
+			}
+		}
+	}
+	
+	
+	
+	
+}
+
 /************************************************************************/
 /* main                                                                 */
 /************************************************************************/
@@ -1144,6 +1229,11 @@ int main(void)
 	if (xTaskCreate(task_sd_card, "SSCard", TASK_LCD_STACK_SIZE, NULL, TASK_LCD_STACK_PRIORITY, NULL) != pdPASS) {
 		printf("Failed to create test SDCard task\r\n");
 	}
+	
+	if (xTaskCreate(task_buz, "buzzer", TASK_WIFI_STACK_SIZE, NULL, TASK_WIFI_STACK_PRIORITY, NULL) != pdPASS) {
+		printf("Failed to create test bUZZER task\r\n");
+	}
+
 	vTaskStartScheduler();
 	
 	while(1) {};

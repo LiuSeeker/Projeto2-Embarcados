@@ -37,6 +37,11 @@
 #define PRESENCA_PIN		  21
 #define PRESENCA_PIN_MASK     (1 << PRESENCA_PIN)
 
+#define BUZ_PIO_ID        ID_PIOA
+#define BUZ_PIO           PIOA
+#define BUZ_PIN       6
+#define BUZ_PIN_MASK  (1u << BUZ_PIN)
+
 #define TWIHS_MCU6050_ID    ID_TWIHS0
 #define TWIHS_MCU6050       TWIHS0
 
@@ -47,6 +52,9 @@
 
 #define TASK_LCD_STACK_SIZE            (10*1024/sizeof(portSTACK_TYPE))
 #define TASK_LCD_STACK_PRIORITY        (tskIDLE_PRIORITY)
+
+#define TASK_GENERICO_STACK_SIZE            (4096/sizeof(portSTACK_TYPE))
+#define TASK_GENERICO_STACK_PRIORITY        (tskIDLE_PRIORITY)
 
 #define YEAR 0
 #define MOUNTH 0
