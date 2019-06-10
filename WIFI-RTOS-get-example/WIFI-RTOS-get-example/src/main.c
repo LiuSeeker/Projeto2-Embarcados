@@ -1255,13 +1255,13 @@ int main(void)
 	if (xTaskCreate(task_bme, "bme", TASK_WIFI_STACK_SIZE, NULL,TASK_WIFI_STACK_PRIORITY, NULL) != pdPASS) {
 		printf("Failed to create BME task\r\n");
 	}
-	if (xTaskCreate(task_molhado, "molhado", TASK_WIFI_STACK_SIZE, NULL,TASK_WIFI_STACK_PRIORITY, NULL) != pdPASS) {
+	if (xTaskCreate(task_molhado, "molhado", TASK_GENERICO_STACK_SIZE, NULL,TASK_GENERICO_STACK_PRIORITY, NULL) != pdPASS) {
 		printf("Failed to create Molhado task\r\n");
 	}
 	if (xTaskCreate(task_co2, "CO2", TASK_WIFI_STACK_SIZE, NULL,TASK_WIFI_STACK_PRIORITY, NULL) != pdPASS) {
 		printf("Failed to create CO2 task\r\n");
 	}
-	if (xTaskCreate(task_presenca, "Presenca", TASK_WIFI_STACK_SIZE, NULL,TASK_WIFI_STACK_PRIORITY, NULL) != pdPASS) {
+	if (xTaskCreate(task_presenca, "Presenca", TASK_GENERICO_STACK_SIZE, NULL,TASK_GENERICO_STACK_PRIORITY, NULL) != pdPASS) {
 		printf("Failed to create Presen�a task\r\n");
 	}
 	///* Create task to handler LCD */
@@ -1272,7 +1272,7 @@ int main(void)
 		printf("Failed to create test SDCard task\r\n");
 	}
 	
-	if (xTaskCreate(task_buz, "buzzer", TASK_WIFI_STACK_SIZE, NULL, TASK_WIFI_STACK_PRIORITY, NULL) != pdPASS) {
+	if (xTaskCreate(task_buz, "buzzer", TASK_GENERICO_STACK_SIZE, NULL, TASK_GENERICO_STACK_PRIORITY, NULL) != pdPASS) {
 		printf("Failed to create test bUZZER task\r\n");
 	}
 

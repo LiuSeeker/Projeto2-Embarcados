@@ -53,7 +53,7 @@
 #define TASK_LCD_STACK_SIZE            (10*1024/sizeof(portSTACK_TYPE))
 #define TASK_LCD_STACK_PRIORITY        (tskIDLE_PRIORITY)
 
-#define TASK_GENERICO_STACK_SIZE            (4096/sizeof(portSTACK_TYPE))
+#define TASK_GENERICO_STACK_SIZE            (2048/sizeof(portSTACK_TYPE))
 #define TASK_GENERICO_STACK_PRIORITY        (tskIDLE_PRIORITY)
 
 #define YEAR 0
