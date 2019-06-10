@@ -821,16 +821,17 @@ void RTC_init() {
 	/* Configura data e hora manualmente */
 	rtc_set_date(RTC, YEAR, MOUNTH, DAY, WEEK);
 	rtc_set_time(RTC, HOUR, MINUTE, SECOND);
+	
 
 	/* Configure RTC interrupts */
-	NVIC_DisableIRQ(RTC_IRQn);
-	NVIC_ClearPendingIRQ(RTC_IRQn);
-	NVIC_SetPriority(RTC_IRQn, 5);
-	NVIC_EnableIRQ(RTC_IRQn);
+	//NVIC_DisableIRQ(RTC_IRQn);
+	//NVIC_ClearPendingIRQ(RTC_IRQn);
+	//NVIC_SetPriority(RTC_IRQn, 5);
+	//NVIC_EnableIRQ(RTC_IRQn);
 
 	/* Ativa interrupcao via alarme */
 	//	rtc_enable_interrupt(RTC, RTC_IER_ALREN);
-	rtc_enable_interrupt(RTC, RTC_IER_SECEN);
+	//rtc_enable_interrupt(RTC, RTC_IER_SECEN);
 }
 
 void BUZ_init(void){
@@ -926,6 +927,7 @@ static void task_bme(void *pvParameters){
 	xQueuePress = xQueueCreate(10, sizeof(int));
 	xQueueUmi = xQueueCreate(10, sizeof(int));
 	
+	
 	bme280_i2c_bus_init();
 	
 	Bool validado = false;
@@ -933,6 +935,12 @@ static void task_bme(void *pvParameters){
 	int32_t dig_T1, dig_T2, dig_T3;
 	int32_t dig_P1, dig_P2, dig_P3, dig_P4, dig_P5, dig_P6, dig_P7, dig_P8, dig_P9;
 	int32_t dig_H1, dig_H2, dig_H3, dig_H4, dig_H5, dig_H6;
+	
+	uint8_t second;
+	uint8_t minute;
+	uint8_t hour;
+	data d;
+	char clock_buffer[100];
 	
 	while(1){
 		if(bme280_validate_id()){
@@ -969,13 +977,22 @@ static void task_bme(void *pvParameters){
 			bme280_i2c_read_compensation_H_lower(&dig_H6, BME280_DIG_H6_REG);
 		}
 		uint32_t flag = 1;
+
+
 		if(validado){
 			if (bme280_i2c_read_temp(&temperatura)){
 				printf("erro ao ler temperatura \n");
 			}
 			else{
 				temperatura = BME280_compensate_T_int32((int32_t)temperatura << 4, dig_T1, dig_T2, dig_T3)/100;
+				
+				rtc_get_time(RTC, &hour, &minute, &second);
+									
+				sprintf(clock_buffer, "H: %02d M: %02d S: %02d", hour, minute, second);
+									
 				printf("Temperatura: %d C\n", temperatura);
+				data d = {D_TYPE_TEMP, temperatura, clock_buffer};
+				xQueueSend( xQueueSDCard, &d, 0);
 				if(temperatura >= 30){
 					xQueueSend(xQueueTemp, &flag, 0);
 					xQueueSend(xQueueBuz, &flag, 0);
@@ -1037,40 +1054,40 @@ static void task_molhado(void *pvParameters){
 	}
 }
 
-void task_adc(void){
-	xQueueAnalog = xQueueCreate( 10, sizeof( int32_t ) );
-	xSemaphoreRTC = xSemaphoreCreateBinary();
-
-	uint8_t second;
-	uint8_t minute;
-	uint8_t hour;
-	config_ADC_TEMP();
-	afec_start_software_conversion(AFEC0);
-	data d;
-	int32_t adcVal;
-	RTC_init();
-	char clock_buffer[100];
-
-	while (true) {
-		if (xSemaphoreTake(xSemaphoreRTC, (TickType_t)10 / portTICK_PERIOD_MS)) {
-			rtc_get_time(RTC, &hour, &minute, &second);
-			
-			sprintf(clock_buffer, "H: %02d M: %02d S: %02d", hour, minute, second);
-			
-		}
-		if (xQueueReceive( xQueueAnalog, &(adcVal), ( TickType_t )  10 / portTICK_PERIOD_MS)) {
-			data d = {D_TYPE_TEMP, adcVal, clock_buffer};
-			afec_start_software_conversion(AFEC0);
-			xQueueSend( xQueueSDCard, &d, 0);
-
-		}
-
-		vTaskDelay(100/portTICK_PERIOD_MS);
-
-	}
-}
+//void task_adc(void){
+	//xQueueAnalog = xQueueCreate( 10, sizeof( int32_t ) );
+	//xSemaphoreRTC = xSemaphoreCreateBinary();
+//
+	//uint8_t second;
+	//uint8_t minute;
+	//uint8_t hour;
+	//config_ADC_TEMP();
+	//afec_start_software_conversion(AFEC0);
+	//data d;
+	//int32_t adcVal;
+	//char clock_buffer[100];
+//
+	//while (true) {
+		////if (xSemaphoreTake(xSemaphoreRTC, (TickType_t)10 / portTICK_PERIOD_MS)) {
+			////rtc_get_time(RTC, &hour, &minute, &second);
+			////
+			////sprintf(clock_buffer, "H: %02d M: %02d S: %02d", hour, minute, second);
+			////
+		////}
+		////if (xQueueReceive( xQueueAnalog, &(adcVal), ( TickType_t )  10 / portTICK_PERIOD_MS)) {
+			////data d = {D_TYPE_TEMP, adcVal, clock_buffer};
+			////afec_start_software_conversion(AFEC0);
+			////xQueueSend( xQueueSDCard, &d, 0);
+////
+		////}
+//
+		//vTaskDelay(100/portTICK_PERIOD_MS);
+//
+	//}
+//}
 
 void task_sd_card(void){
+
 	//xQueueSDCard = xQueueCreate( 10, sizeof( int32_t ) );
 	xQueueSDCard = xQueueCreate( 10, sizeof( data ) );
 
@@ -1183,7 +1200,7 @@ void task_buz(void){
 
 int main(void)
 {
-	
+
 	/* buffer para recebimento de dados */
 	uint8_t bufferRX[100];
 	uint8_t bufferTX[100];
@@ -1197,6 +1214,8 @@ int main(void)
 	/* Disable the watchdog */
 	WDT->WDT_MR = WDT_MR_WDDIS;
 
+			RTC_init();
+			
 	/* Initialize the UART console. */
 	configure_console();
 	printf(STRING_HEADER);
@@ -1222,10 +1241,10 @@ int main(void)
 	if (xTaskCreate(task_presenca, "Presenca", TASK_WIFI_STACK_SIZE, NULL,TASK_WIFI_STACK_PRIORITY, NULL) != pdPASS) {
 		printf("Failed to create Presen�a task\r\n");
 	}
-	/* Create task to handler LCD */
-	if (xTaskCreate(task_adc, "adc", TASK_LCD_STACK_SIZE, NULL, TASK_LCD_STACK_PRIORITY, NULL) != pdPASS) {
-		printf("Failed to create test adc task\r\n");
-	}
+	///* Create task to handler LCD */
+	//if (xTaskCreate(task_adc, "adc", TASK_LCD_STACK_SIZE, NULL, TASK_LCD_STACK_PRIORITY, NULL) != pdPASS) {
+		//printf("Failed to create test adc task\r\n");
+	//}
 	if (xTaskCreate(task_sd_card, "SSCard", TASK_LCD_STACK_SIZE, NULL, TASK_LCD_STACK_PRIORITY, NULL) != pdPASS) {
 		printf("Failed to create test SDCard task\r\n");
 	}

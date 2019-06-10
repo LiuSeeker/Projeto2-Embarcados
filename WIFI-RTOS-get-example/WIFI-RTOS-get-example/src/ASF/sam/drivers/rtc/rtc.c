@@ -216,7 +216,7 @@ uint32_t rtc_set_time(Rtc *p_rtc, uint32_t ul_hour, uint32_t ul_minute,
 	/* Update time register. Check the spec for the flow. */
 	while ((p_rtc->RTC_SR & RTC_SR_SEC) != RTC_SR_SEC);
 	p_rtc->RTC_CR |= RTC_CR_UPDTIM;
-	while ((p_rtc->RTC_SR & RTC_SR_ACKUPD) != RTC_SR_ACKUPD);
+	//while ((p_rtc->RTC_SR & RTC_SR_ACKUPD) != RTC_SR_ACKUPD);
 	p_rtc->RTC_SCCR = RTC_SCCR_ACKCLR;
 	p_rtc->RTC_TIMR = ul_time;
 	p_rtc->RTC_CR &= (~RTC_CR_UPDTIM);
@@ -366,7 +366,7 @@ uint32_t rtc_set_date(Rtc *p_rtc, uint32_t ul_year, uint32_t ul_month,
 	/* Update calendar register. Check the spec for the flow. */
 	while ((p_rtc->RTC_SR & RTC_SR_SEC) != RTC_SR_SEC);
 	p_rtc->RTC_CR |= RTC_CR_UPDCAL;
-	while ((p_rtc->RTC_SR & RTC_SR_ACKUPD) != RTC_SR_ACKUPD);
+	//while ((p_rtc->RTC_SR & RTC_SR_ACKUPD) != RTC_SR_ACKUPD);
 	p_rtc->RTC_SCCR = RTC_SCCR_ACKCLR;
 	p_rtc->RTC_CALR = ul_date;
 	p_rtc->RTC_CR &= (~RTC_CR_UPDCAL);
