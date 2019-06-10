@@ -265,8 +265,12 @@ static void socket_cb(SOCKET sock, uint8_t u8Msg, void *pvMsg)
 
 static void Button1_Handler(uint32_t id, uint32_t mask)
 {
-	int flag = 1;
-	//xQueueSendFromISR(xQueueBuz, &flag, 0);
+	int flage = 0;
+	BaseType_t xHigherPriorityTaskWoken;
+
+	// We have not woken a task at the start of the ISR.
+	xHigherPriorityTaskWoken = pdFALSE;
+	xQueueSendFromISR(xQueueBuz, &flage, &xHigherPriorityTaskWoken);
 }
 
 static void CO2_Handler(uint32_t id, uint32_t mask)
@@ -739,12 +743,14 @@ void BUT_init(void){
 	/* config. interrupcao em borda de descida no botao do kit */
 	/* indica funcao (but_Handler) a ser chamada quando houver uma interrup��o */
 	pio_enable_interrupt(BUT_PIO, BUT_PIN_MASK);
-	pio_handler_set(BUT_PIO, BUT_PIO_ID, BUT_PIN_MASK, PIO_IT_FALL_EDGE, Button1_Handler);
+	
 	
 	/* habilita interrup�c�o do PIO que controla o botao */
 	/* e configura sua prioridade                        */
 	NVIC_EnableIRQ(BUT_PIO_ID);
-	NVIC_SetPriority(BUT_PIO_ID, 0);
+	NVIC_SetPriority(BUT_PIO_ID, 6);
+	NVIC_ClearPendingIRQ(BUT_PIO_ID);
+	pio_handler_set(BUT_PIO, BUT_PIO_ID, BUT_PIN_MASK, PIO_IT_FALL_EDGE, Button1_Handler);
 };
 
 void CO2_init(void){
@@ -977,25 +983,31 @@ static void task_bme(void *pvParameters){
 			bme280_i2c_read_compensation_H_lower(&dig_H6, BME280_DIG_H6_REG);
 		}
 		uint32_t flag = 1;
+		
+		uint32_t flag2 = 5;
+		uint32_t flag3 = 10;
 
 
 		if(validado){
+			rtc_get_time(RTC, &hour, &minute, &second);
+			
+			sprintf(clock_buffer, "H: %02d M: %02d S: %02d", hour, minute, second);
+			
 			if (bme280_i2c_read_temp(&temperatura)){
 				printf("erro ao ler temperatura \n");
 			}
 			else{
 				temperatura = BME280_compensate_T_int32((int32_t)temperatura << 4, dig_T1, dig_T2, dig_T3)/100;
-				
-				rtc_get_time(RTC, &hour, &minute, &second);
-									
-				sprintf(clock_buffer, "H: %02d M: %02d S: %02d", hour, minute, second);
-									
+					
 				printf("Temperatura: %d C\n", temperatura);
 				data d = {D_TYPE_TEMP, temperatura, clock_buffer};
 				xQueueSend( xQueueSDCard, &d, 0);
-				if(temperatura >= 30){
+				if(temperatura >= 32){
 					xQueueSend(xQueueTemp, &flag, 0);
-					xQueueSend(xQueueBuz, &flag, 0);
+					xQueueSend(xQueueBuz, &flag2, 0);
+				}
+				if(temperatura <= 30){
+					xQueueSend(xQueueBuz, &flag3, 0);
 				}
 			}
 			
@@ -1005,6 +1017,10 @@ static void task_bme(void *pvParameters){
 			else{
 				pressao = BME280_compensate_P_int64((int32_t)pressao << 4, dig_P1, dig_P2, dig_P3, dig_P4, dig_P5, dig_P6, dig_P7, dig_P8, dig_P9);
 				printf("Pressao: %u Pa\n", pressao/256);
+				
+				data d = {D_TYPE_PRESSURE, pressao/256, clock_buffer};
+				xQueueSend( xQueueSDCard, &d, 0);
+				
 			}
 			
 			if (bme280_i2c_read_umi(&umidade)){
@@ -1013,6 +1029,9 @@ static void task_bme(void *pvParameters){
 			else{
 				umidade = bme280_compensate_H_int32((int32_t)umidade << 4, dig_H1, dig_H2, dig_H3, dig_H4, dig_H5, dig_H6)/1024;
 				printf("Umidade: %u %%\n", umidade);
+				
+				data d = {D_TYPE_HUMIDITY, umidade, clock_buffer};
+				xQueueSend( xQueueSDCard, &d, 0);
 			}
 		}
 		vTaskDelay(5000/portTICK_PERIOD_MS);
@@ -1054,38 +1073,40 @@ static void task_molhado(void *pvParameters){
 	}
 }
 
-//void task_adc(void){
-	//xQueueAnalog = xQueueCreate( 10, sizeof( int32_t ) );
-	//xSemaphoreRTC = xSemaphoreCreateBinary();
-//
-	//uint8_t second;
-	//uint8_t minute;
-	//uint8_t hour;
-	//config_ADC_TEMP();
-	//afec_start_software_conversion(AFEC0);
-	//data d;
-	//int32_t adcVal;
-	//char clock_buffer[100];
-//
-	//while (true) {
-		////if (xSemaphoreTake(xSemaphoreRTC, (TickType_t)10 / portTICK_PERIOD_MS)) {
-			////rtc_get_time(RTC, &hour, &minute, &second);
-			////
-			////sprintf(clock_buffer, "H: %02d M: %02d S: %02d", hour, minute, second);
-			////
-		////}
-		////if (xQueueReceive( xQueueAnalog, &(adcVal), ( TickType_t )  10 / portTICK_PERIOD_MS)) {
-			////data d = {D_TYPE_TEMP, adcVal, clock_buffer};
-			////afec_start_software_conversion(AFEC0);
-			////xQueueSend( xQueueSDCard, &d, 0);
-////
-		////}
-//
-		//vTaskDelay(100/portTICK_PERIOD_MS);
-//
-	//}
-//}
+/*
+ void task_adc(void){
+ 	xQueueAnalog = xQueueCreate( 10, sizeof( int32_t ) );
+ 	xSemaphoreRTC = xSemaphoreCreateBinary();
+ 
+ 	uint8_t second;
+ 	uint8_t minute;
+ 	uint8_t hour;
+ 	config_ADC_TEMP();
+ 	afec_start_software_conversion(AFEC0);
+ 	data d;
+ 	int32_t adcVal;
+ 	char clock_buffer[100];
+ 
+ 	while (true) {
+ 		if (xSemaphoreTake(xSemaphoreRTC, (TickType_t)10 / portTICK_PERIOD_MS)) {
+	 		rtc_get_time(RTC, &hour, &minute, &second);
+	 		
+	 		sprintf(clock_buffer, "H: %02d M: %02d S: %02d", hour, minute, second);
+	 		
+ 		}
+ 		if (xQueueReceive( xQueueAnalog, &(adcVal), ( TickType_t )  10 / portTICK_PERIOD_MS)) {
+	 		data d = {D_TYPE_TEMP, adcVal, clock_buffer};
+	 		afec_start_software_conversion(AFEC0);
+	 		xQueueSend( xQueueSDCard, &d, 0);
+	 		
+ 		}
+ 		
+ 		vTaskDelay(100/portTICK_PERIOD_MS);
+ 
+ 	}
+ }
 
+*/
 void task_sd_card(void){
 
 	//xQueueSDCard = xQueueCreate( 10, sizeof( int32_t ) );
@@ -1164,34 +1185,35 @@ void task_sd_card(void){
 }
 
 void task_buz(void){
+	BUZ_init();
 	Bool alarm = false;
-	xQueueBuz = xQueueCreate(10, sizeof(int));
 	
 	int flag_buz = 0;
+	Bool cd = false;
 	
 	while (true){
-		if(xQueueReceive(xQueueBuz, &flag_buz, ( TickType_t )  500 / portTICK_PERIOD_MS)){
-			if(flag_buz){
-				if(!alarm){
+		if(xQueueReceive(xQueueBuz, &flag_buz, ( TickType_t )  5000 / portTICK_PERIOD_MS)){
+			if(flag_buz == 5){
+				if(!alarm && !cd){
 					pin_toggle(LED_PIO, LED_PIN_MASK);
 					pio_set(PIOA, BUZ_PIN_MASK);
 					alarm = true;
 				}
 			}
+			if (flag_buz == 10){
+				cd = false;
+			}
 			if(flag_buz == 0){
 				if(alarm){
-					pio_set(PIOA, BUZ_PIN_MASK);
+					pio_clear(PIOA, BUZ_PIN_MASK);
 					pin_toggle(LED_PIO, LED_PIN_MASK);
 					alarm = false;
+					cd = true;
 				}
 				
 			}
 		}
 	}
-	
-	
-	
-	
 }
 
 /************************************************************************/
@@ -1214,7 +1236,7 @@ int main(void)
 	/* Disable the watchdog */
 	WDT->WDT_MR = WDT_MR_WDDIS;
 
-			RTC_init();
+	RTC_init();
 			
 	/* Initialize the UART console. */
 	configure_console();
@@ -1224,6 +1246,7 @@ int main(void)
 	LED_init(1);
 	
 	/* Configura os bot�es */
+	xQueueBuz = xQueueCreate(10, sizeof(int));
 	BUT_init();
 	
 	if (xTaskCreate(task_wifi, "Wifi", TASK_WIFI_STACK_SIZE, NULL,TASK_WIFI_STACK_PRIORITY, NULL) != pdPASS) {
