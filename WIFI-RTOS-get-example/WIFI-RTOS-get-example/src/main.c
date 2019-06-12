@@ -753,6 +753,7 @@ void BUT_init(void){
 	pio_handler_set(BUT_PIO, BUT_PIO_ID, BUT_PIN_MASK, PIO_IT_FALL_EDGE, Button1_Handler);
 };
 
+
 void CO2_init(void){
 	/* config. pino botao em modo de entrada */
 	pmc_enable_periph_clk(CO2_PIO_ID);
@@ -912,7 +913,7 @@ static void task_wifi(void *pvParameters) {
 				}
 
 				/* Connect server */
-				printf("socket connecting\n");
+				printf("socket connecting\n\n");
 				
 				if (connect(tcp_client_socket, (struct sockaddr *)&addr_in, sizeof(struct sockaddr_in)) != SOCK_ERR_NO_ERROR) {
 					close(tcp_client_socket);
@@ -929,6 +930,7 @@ static void task_wifi(void *pvParameters) {
 }
 
 static void task_bme(void *pvParameters){
+	//PINO PA6
 	xQueueTemp = xQueueCreate(10, sizeof(int));
 	xQueuePress = xQueueCreate(10, sizeof(int));
 	xQueueUmi = xQueueCreate(10, sizeof(int));
@@ -1050,7 +1052,7 @@ static void task_presenca(void *pvParameters){
 		vTaskDelay(5000/portTICK_PERIOD_MS);
 	}
 }
-
+/*
 static void task_co2(void *pvParameters){
 	xQueueCo = xQueueCreate(10, sizeof(int32_t));
 	
@@ -1061,7 +1063,7 @@ static void task_co2(void *pvParameters){
 		vTaskDelay(5000/portTICK_PERIOD_MS);
 	}
 }
-
+*/
 static void task_molhado(void *pvParameters){
 	xQueueMolhado = xQueueCreate(10, sizeof(int32_t));
 	
@@ -1073,40 +1075,27 @@ static void task_molhado(void *pvParameters){
 	}
 }
 
-/*
+
  void task_adc(void){
+	//PINO PD30
  	xQueueAnalog = xQueueCreate( 10, sizeof( int32_t ) );
- 	xSemaphoreRTC = xSemaphoreCreateBinary();
  
- 	uint8_t second;
- 	uint8_t minute;
- 	uint8_t hour;
  	config_ADC_TEMP();
  	afec_start_software_conversion(AFEC0);
- 	data d;
  	int32_t adcVal;
- 	char clock_buffer[100];
  
  	while (true) {
- 		if (xSemaphoreTake(xSemaphoreRTC, (TickType_t)10 / portTICK_PERIOD_MS)) {
-	 		rtc_get_time(RTC, &hour, &minute, &second);
-	 		
-	 		sprintf(clock_buffer, "H: %02d M: %02d S: %02d", hour, minute, second);
-	 		
- 		}
- 		if (xQueueReceive( xQueueAnalog, &(adcVal), ( TickType_t )  10 / portTICK_PERIOD_MS)) {
-	 		data d = {D_TYPE_TEMP, adcVal, clock_buffer};
+ 		if (xQueueReceive( xQueueAnalog, &(adcVal), ( TickType_t )  5000 / portTICK_PERIOD_MS)) {
 	 		afec_start_software_conversion(AFEC0);
-	 		xQueueSend( xQueueSDCard, &d, 0);
+			printf("CO2: %d\n", adcVal);
 	 		
  		}
  		
- 		vTaskDelay(100/portTICK_PERIOD_MS);
+ 		vTaskDelay(5000/portTICK_PERIOD_MS);
  
  	}
  }
-
-*/
+ 
 void task_sd_card(void){
 
 	//xQueueSDCard = xQueueCreate( 10, sizeof( int32_t ) );
@@ -1258,16 +1247,18 @@ int main(void)
 	if (xTaskCreate(task_molhado, "molhado", TASK_GENERICO_STACK_SIZE, NULL,TASK_GENERICO_STACK_PRIORITY, NULL) != pdPASS) {
 		printf("Failed to create Molhado task\r\n");
 	}
+	/*
 	if (xTaskCreate(task_co2, "CO2", TASK_WIFI_STACK_SIZE, NULL,TASK_WIFI_STACK_PRIORITY, NULL) != pdPASS) {
 		printf("Failed to create CO2 task\r\n");
 	}
+	*/
 	if (xTaskCreate(task_presenca, "Presenca", TASK_GENERICO_STACK_SIZE, NULL,TASK_GENERICO_STACK_PRIORITY, NULL) != pdPASS) {
 		printf("Failed to create Presen�a task\r\n");
 	}
 	///* Create task to handler LCD */
-	//if (xTaskCreate(task_adc, "adc", TASK_LCD_STACK_SIZE, NULL, TASK_LCD_STACK_PRIORITY, NULL) != pdPASS) {
-		//printf("Failed to create test adc task\r\n");
-	//}
+	if (xTaskCreate(task_adc, "adc", TASK_WIFI_STACK_SIZE, NULL, TASK_LCD_STACK_PRIORITY, NULL) != pdPASS) {
+		printf("Failed to create test adc task\r\n");
+	}
 	if (xTaskCreate(task_sd_card, "SSCard", TASK_LCD_STACK_SIZE, NULL, TASK_LCD_STACK_PRIORITY, NULL) != pdPASS) {
 		printf("Failed to create test SDCard task\r\n");
 	}
