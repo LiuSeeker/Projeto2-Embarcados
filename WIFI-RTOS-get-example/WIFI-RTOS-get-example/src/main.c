@@ -1006,7 +1006,7 @@ static void task_bme(void *pvParameters){
 			else{
 				temperatura = BME280_compensate_T_int32((int32_t)temperatura << 4, dig_T1, dig_T2, dig_T3)/100;
 					
-				//printf("Temperatura: %d C\n", temperatura);
+				printf("Temperatura: %d C\n", temperatura);
 				data d = {D_TYPE_TEMP, temperatura, clock_buffer};
 				xQueueSend( xQueueSDCard, &d, 0);
 				if(temperatura >= 32){
@@ -1100,14 +1100,14 @@ static void task_molhado(void *pvParameters){
 	 char clock_buffer2[100];
 	 uint32_t flag = 1;
 	 
-	 uint32_t flag2 = 5;
-	 uint32_t flag3 = 10;
+	 uint32_t flag2 = 25;
+	 uint32_t flag3 = 20;
  
  	while (true) {
  		if (xQueueReceive( xQueueCo, &(adcVal), ( TickType_t )  5000 / portTICK_PERIOD_MS)) {
 
 
-			 int convertido = adcVal*2-580;
+			 int convertido = adcVal*2-600;
 			printf("CO2: %d g/m3\n", convertido);
 			rtc_get_time(RTC, &hour2, &minute2, &second2);
 			
@@ -1116,7 +1116,7 @@ static void task_molhado(void *pvParameters){
 			afec_start_software_conversion(AFEC0);
 			xQueueSend( xQueueSDCard, &d, 0);
 			
-			if(convertido >= 300){
+			if(convertido >= 310){
 				xQueueSend(xQueueICo, &flag, 0);
 				xQueueSend(xQueueBuz, &flag2, 0);
 			}
@@ -1212,26 +1212,67 @@ void task_buz(void){
 	Bool alarm = false;
 	
 	int flag_buz = 0;
-	Bool cd = false;
+	Bool cdtemp = false;
+	Bool cdco = false;
+	int last = 0;
 	
 	while (true){
 		if(xQueueReceive(xQueueBuz, &flag_buz, ( TickType_t )  5000 / portTICK_PERIOD_MS)){
 			if(flag_buz == 5){
-				if(!alarm && !cd){
-					pin_toggle(LED_PIO, LED_PIN_MASK);
-					pio_set(PIOA, BUZ_PIN_MASK);
-					alarm = true;
+				if(!alarm && !cdtemp){
+					if (last == 0){
+						if(last == 25){
+							last = 30;
+						}
+						else{
+							last = 5;
+							pin_toggle(LED_PIO, LED_PIN_MASK);
+							pio_set(PIOA, BUZ_PIN_MASK);
+							alarm = true;
+						}
+					}
+				}
+			}
+			if(flag_buz == 25){
+				if(!alarm && !cdco){
+					if (last == 0){
+						if(last == 5){
+							last = 30;
+						}
+						else{
+							last = 25;
+							pin_toggle(LED_PIO, LED_PIN_MASK);
+							pio_set(PIOA, BUZ_PIN_MASK);
+							alarm = true;
+						}
+					}
+					
+					
 				}
 			}
 			if (flag_buz == 10){
-				cd = false;
+				cdtemp = false;
+			}
+			if (flag_buz == 20){
+				cdco = false;
 			}
 			if(flag_buz == 0){
 				if(alarm){
+					if(last == 5){
+						cdtemp = true;
+					}
+					if(last == 25){
+						cdco = true;
+					}
+					if(last == 30){
+						cdtemp = true;
+						cdco = true;
+					}
 					pio_clear(PIOA, BUZ_PIN_MASK);
 					pin_toggle(LED_PIO, LED_PIN_MASK);
+					last = 0;
 					alarm = false;
-					cd = true;
+					
 				}
 				
 			}
