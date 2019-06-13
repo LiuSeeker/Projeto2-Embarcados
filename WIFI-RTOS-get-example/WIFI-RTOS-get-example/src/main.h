@@ -19,7 +19,7 @@ static uint8_t gau8MacAddr[] = MAIN_MAC_ADDRESS;
 static uint8_t gacDeviceName[] = MAIN_M2M_DEVICE_NAME;
 
 /** Using broadcast address for simplicity. */
-#define MAIN_SERVER_PORT                    (8080)
+#define MAIN_SERVER_PORT                    (8000)
 
 /** IP address parsing. */
 #define IPV4_BYTE(val, index)               ((val >> (index * 8)) & 0xFF)
@@ -30,7 +30,7 @@ static uint8_t gacDeviceName[] = MAIN_M2M_DEVICE_NAME;
 
 
 /** Weather information provider server. */
-#define MAIN_SERVER_NAME                    "http://juanjg.pythonanywhere.com/"
+#define MAIN_SERVER_NAME                    "35.173.69.207"
 
 /** Receive buffer size. */
 #define MAIN_WIFI_M2M_BUFFER_SIZE           1400
@@ -42,6 +42,7 @@ static uint8_t gacDeviceName[] = MAIN_M2M_DEVICE_NAME;
 #define D_TYPE_HUMIDITY "Timestamp: %s -> Humidity: %d %%\n"
 #define D_TYPE_PRESSURE "Timestamp: %s -> Pressure: %d Pa\n"
 #define D_TYPE_SMOKE "Timestamp: %s -> CO2: %d g/m3\n"
+#define D_TYPE_PRESENCA "Timestamp: %s -> Presenca: %d \n"
 typedef struct{
 	char type[50];
 	int32_t value;

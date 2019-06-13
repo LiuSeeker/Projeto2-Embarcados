@@ -1107,7 +1107,7 @@ static void task_molhado(void *pvParameters){
  		if (xQueueReceive( xQueueCo, &(adcVal), ( TickType_t )  5000 / portTICK_PERIOD_MS)) {
 
 
-			 int convertido = adcVal*2-600;
+			 int convertido = adcVal*2-580;
 			printf("CO2: %d g/m3\n", convertido);
 			rtc_get_time(RTC, &hour2, &minute2, &second2);
 			

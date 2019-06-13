@@ -32,9 +32,9 @@
 #define MOLHADO_PIN		      2
 #define MOLHADO_PIN_MASK      (1 << MOLHADO_PIN)
 
-#define PRESENCA_PIO_ID       ID_PIOA
-#define PRESENCA_PIO          PIOA
-#define PRESENCA_PIN		  21
+#define PRESENCA_PIO_ID       ID_PIOD
+#define PRESENCA_PIO          PIOD
+#define PRESENCA_PIN		  26
 #define PRESENCA_PIN_MASK     (1 << PRESENCA_PIN)
 
 #define BUZ_PIO_ID        ID_PIOA
