@@ -41,7 +41,6 @@ volatile uint8_t  accXLow,  accYLow,  accZLow;
 /* Canal do sensor de temperatura */
 #define AFEC_CHANNEL_TEMP_SENSOR 0
 
-QueueHandle_t xQueueAnalog;
 QueueHandle_t xQueueSDCard;
 QueueHandle_t xQueueTemp;
 QueueHandle_t xQueuePress;
@@ -292,13 +291,13 @@ static void AFEC_Temp_callback(void)
 {
 	int32_t adcVal;
 	adcVal = afec_channel_get_value(AFEC0, AFEC_CHANNEL_TEMP_SENSOR);
-	xQueueSendFromISR( xQueueAnalog, &adcVal, 0);
+	xQueueSendFromISR( xQueueCo, &adcVal, 0);
 	//
 	//g_ul_value = afec_channel_get_value(AFEC0, AFEC_CHANNEL_TEMP_SENSOR);
 	//g_is_conversion_done = true;
 	//printf("converteu");
 }
-
+/*
 void RTC_Handler(void) {
 	uint32_t ul_status = rtc_get_status(RTC);
 	uint16_t hour;
@@ -324,7 +323,7 @@ void RTC_Handler(void) {
 	rtc_clear_status(RTC, RTC_SCCR_CALCLR);
 	rtc_clear_status(RTC, RTC_SCCR_TDERRCLR);
 }
-
+*/
 /************************************************************************/
 /* funcoes                                                              */
 /************************************************************************/
@@ -563,10 +562,6 @@ static int32_t convert_adc_to_temp(int32_t ADC_value){
 }
 
 static void config_ADC_TEMP(void){
-	/*************************************
-	* Ativa e configura AFEC
-	*************************************/
-	/* Ativa AFEC - 0 */
 	afec_enable(AFEC0);
 
 	/* struct de configuracao do AFEC */
@@ -582,7 +577,7 @@ static void config_ADC_TEMP(void){
 	afec_set_trigger(AFEC0, AFEC_TRIG_SW);
 
 	/* configura call back */
-	afec_set_callback(AFEC0, AFEC_INTERRUPT_EOC_0,	AFEC_Temp_callback, 5);
+	afec_set_callback(AFEC0, AFEC_INTERRUPT_EOC_0,	AFEC_Temp_callback, 7);
 
 	/*** Configuracao espec?fica do canal AFEC ***/
 	struct afec_ch_config afec_ch_cfg;
@@ -742,7 +737,7 @@ void BUT_init(void){
 	
 	/* config. interrupcao em borda de descida no botao do kit */
 	/* indica funcao (but_Handler) a ser chamada quando houver uma interrup��o */
-	pio_enable_interrupt(BUT_PIO, BUT_PIN_MASK);
+	
 	
 	
 	/* habilita interrup�c�o do PIO que controla o botao */
@@ -751,6 +746,9 @@ void BUT_init(void){
 	NVIC_SetPriority(BUT_PIO_ID, 6);
 	NVIC_ClearPendingIRQ(BUT_PIO_ID);
 	pio_handler_set(BUT_PIO, BUT_PIO_ID, BUT_PIN_MASK, PIO_IT_FALL_EDGE, Button1_Handler);
+
+pio_enable_interrupt(BUT_PIO, BUT_PIN_MASK);
+
 };
 
 
@@ -931,10 +929,6 @@ static void task_wifi(void *pvParameters) {
 
 static void task_bme(void *pvParameters){
 	//PINO PA6
-	xQueueTemp = xQueueCreate(10, sizeof(int));
-	xQueuePress = xQueueCreate(10, sizeof(int));
-	xQueueUmi = xQueueCreate(10, sizeof(int));
-	
 	
 	bme280_i2c_bus_init();
 	
@@ -1041,6 +1035,7 @@ static void task_bme(void *pvParameters){
 	
 }
 
+/*
 static void task_presenca(void *pvParameters){
 	xQueuePresen = xQueueCreate(10, sizeof(int32_t));
 	
@@ -1052,6 +1047,8 @@ static void task_presenca(void *pvParameters){
 		vTaskDelay(5000/portTICK_PERIOD_MS);
 	}
 }
+*/
+
 /*
 static void task_co2(void *pvParameters){
 	xQueueCo = xQueueCreate(10, sizeof(int32_t));
@@ -1064,6 +1061,8 @@ static void task_co2(void *pvParameters){
 	}
 }
 */
+
+/*
 static void task_molhado(void *pvParameters){
 	xQueueMolhado = xQueueCreate(10, sizeof(int32_t));
 	
@@ -1074,20 +1073,33 @@ static void task_molhado(void *pvParameters){
 		vTaskDelay(6000/portTICK_PERIOD_MS);
 	}
 }
-
+*/
 
  void task_adc(void){
 	//PINO PD30
- 	xQueueAnalog = xQueueCreate( 10, sizeof( int32_t ) );
+ 	
  
  	config_ADC_TEMP();
  	afec_start_software_conversion(AFEC0);
  	int32_t adcVal;
+	 
+	 uint8_t second2;
+	 uint8_t minute2;
+	 uint8_t hour2;
+	 char clock_buffer2[100];
  
  	while (true) {
- 		if (xQueueReceive( xQueueAnalog, &(adcVal), ( TickType_t )  5000 / portTICK_PERIOD_MS)) {
-	 		afec_start_software_conversion(AFEC0);
-			printf("CO2: %d\n", adcVal);
+ 		if (xQueueReceive( xQueueCo, &(adcVal), ( TickType_t )  5000 / portTICK_PERIOD_MS)) {
+
+			 int convertido = adcVal*2-580;
+			printf("CO2: %d g/m3\n", convertido);
+			rtc_get_time(RTC, &hour2, &minute2, &second2);
+			
+			sprintf(clock_buffer2, "H: %02d M: %02d S: %02d", hour2, minute2, second2);
+			data d = {D_TYPE_SMOKE, convertido, clock_buffer2};
+			afec_start_software_conversion(AFEC0);
+			xQueueSend( xQueueSDCard, &d, 0);
+			
 	 		
  		}
  		
@@ -1096,10 +1108,7 @@ static void task_molhado(void *pvParameters){
  	}
  }
  
-void task_sd_card(void){
-
-	//xQueueSDCard = xQueueCreate( 10, sizeof( int32_t ) );
-	xQueueSDCard = xQueueCreate( 10, sizeof( data ) );
+void task_sd_card(void){	
 
 	char test_file_name[] = "0:sd_mmc_test.txt";
 	char analog_file_name[] = "0:analog.txt";
@@ -1236,37 +1245,57 @@ int main(void)
 	
 	/* Configura os bot�es */
 	xQueueBuz = xQueueCreate(10, sizeof(int));
+	xQueueTemp = xQueueCreate(10, sizeof(int));
+	xQueuePress = xQueueCreate(10, sizeof(int));
+	xQueueUmi = xQueueCreate(10, sizeof(int));
+	xQueueCo = xQueueCreate( 10, sizeof( int32_t ) );
+	xQueueSDCard = xQueueCreate( 10, sizeof( data ) );
 	BUT_init();
 	
 	if (xTaskCreate(task_wifi, "Wifi", TASK_WIFI_STACK_SIZE, NULL,TASK_WIFI_STACK_PRIORITY, NULL) != pdPASS) {
 		printf("Failed to create Wifi task\r\n");
 	}
+	
+	
 	if (xTaskCreate(task_bme, "bme", TASK_WIFI_STACK_SIZE, NULL,TASK_WIFI_STACK_PRIORITY, NULL) != pdPASS) {
 		printf("Failed to create BME task\r\n");
 	}
+	
+	/*
 	if (xTaskCreate(task_molhado, "molhado", TASK_GENERICO_STACK_SIZE, NULL,TASK_GENERICO_STACK_PRIORITY, NULL) != pdPASS) {
 		printf("Failed to create Molhado task\r\n");
 	}
+	*/
 	/*
 	if (xTaskCreate(task_co2, "CO2", TASK_WIFI_STACK_SIZE, NULL,TASK_WIFI_STACK_PRIORITY, NULL) != pdPASS) {
 		printf("Failed to create CO2 task\r\n");
 	}
 	*/
+	
+	/*
 	if (xTaskCreate(task_presenca, "Presenca", TASK_GENERICO_STACK_SIZE, NULL,TASK_GENERICO_STACK_PRIORITY, NULL) != pdPASS) {
 		printf("Failed to create Presen�a task\r\n");
 	}
+	*/
+	
 	///* Create task to handler LCD */
+	
+	
 	if (xTaskCreate(task_adc, "adc", TASK_WIFI_STACK_SIZE, NULL, TASK_LCD_STACK_PRIORITY, NULL) != pdPASS) {
 		printf("Failed to create test adc task\r\n");
 	}
+	
+	
+	
 	if (xTaskCreate(task_sd_card, "SSCard", TASK_LCD_STACK_SIZE, NULL, TASK_LCD_STACK_PRIORITY, NULL) != pdPASS) {
 		printf("Failed to create test SDCard task\r\n");
 	}
 	
+	
 	if (xTaskCreate(task_buz, "buzzer", TASK_GENERICO_STACK_SIZE, NULL, TASK_GENERICO_STACK_PRIORITY, NULL) != pdPASS) {
 		printf("Failed to create test bUZZER task\r\n");
 	}
-
+	
 	vTaskStartScheduler();
 	
 	while(1) {};
