@@ -51,6 +51,7 @@ QueueHandle_t xQueueMolhado;
 QueueHandle_t xQueueBuz;
 QueueHandle_t xQueueICo;
 
+
 SemaphoreHandle_t xSemaphoreRTC;
 
 
@@ -288,9 +289,13 @@ static void CO2_Handler(uint32_t id, uint32_t mask)
 	printf("CO2 Handler");
 }
 
-static void PRESENCA_Handler(uint32_t id, uint32_t mask)
-{
-	printf("Presença Handler");
+static void PRESENCA_Handler(uint32_t id, uint32_t mask){
+	int flage = 1;
+	BaseType_t xHigherPriorityTaskWoken;
+
+	// We have not woken a task at the start of the ISR.
+	xHigherPriorityTaskWoken = pdFALSE;
+	xQueueSendFromISR(xQueuePresen, &flage, &xHigherPriorityTaskWoken);
 }
 
 static void MOLHADO_Handler(uint32_t id, uint32_t mask)
@@ -310,29 +315,29 @@ static void AFEC_Temp_callback(void)
 }
 /*
 void RTC_Handler(void) {
-	uint32_t ul_status = rtc_get_status(RTC);
-	uint16_t hour;
-	uint16_t m;
-	uint16_t se;
+uint32_t ul_status = rtc_get_status(RTC);
+uint16_t hour;
+uint16_t m;
+uint16_t se;
 
-	//INTERRUP??O POR SEGUNDO
-	if ((ul_status & RTC_SR_SEC) == RTC_SR_SEC) {
-		rtc_clear_status(RTC, RTC_SCCR_SECCLR);
-		BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+//INTERRUP??O POR SEGUNDO
+if ((ul_status & RTC_SR_SEC) == RTC_SR_SEC) {
+rtc_clear_status(RTC, RTC_SCCR_SECCLR);
+BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 
-		xSemaphoreGiveFromISR(xSemaphoreRTC, NULL);
-	}
+xSemaphoreGiveFromISR(xSemaphoreRTC, NULL);
+}
 
-	//INTERRUP??O POR ALARME
-	if ((ul_status & RTC_SR_ALARM) == RTC_SR_ALARM) {
+//INTERRUP??O POR ALARME
+if ((ul_status & RTC_SR_ALARM) == RTC_SR_ALARM) {
 
-		rtc_clear_status(RTC, RTC_SCCR_ALRCLR);
-	}
+rtc_clear_status(RTC, RTC_SCCR_ALRCLR);
+}
 
-	rtc_clear_status(RTC, RTC_SCCR_ACKCLR);
-	rtc_clear_status(RTC, RTC_SCCR_TIMCLR);
-	rtc_clear_status(RTC, RTC_SCCR_CALCLR);
-	rtc_clear_status(RTC, RTC_SCCR_TDERRCLR);
+rtc_clear_status(RTC, RTC_SCCR_ACKCLR);
+rtc_clear_status(RTC, RTC_SCCR_TIMCLR);
+rtc_clear_status(RTC, RTC_SCCR_CALCLR);
+rtc_clear_status(RTC, RTC_SCCR_TDERRCLR);
 }
 */
 /************************************************************************/
@@ -758,7 +763,7 @@ void BUT_init(void){
 	NVIC_ClearPendingIRQ(BUT_PIO_ID);
 	pio_handler_set(BUT_PIO, BUT_PIO_ID, BUT_PIN_MASK, PIO_IT_FALL_EDGE, Button1_Handler);
 
-pio_enable_interrupt(BUT_PIO, BUT_PIN_MASK);
+	pio_enable_interrupt(BUT_PIO, BUT_PIN_MASK);
 
 };
 
@@ -800,15 +805,19 @@ void PRESENCA_init(void){
 	pmc_enable_periph_clk(PRESENCA_PIO_ID);
 	pio_set_input(PRESENCA_PIO, PRESENCA_PIN_MASK, PIO_PULLUP | PIO_DEBOUNCE);
 	
-	/* config. interrupcao em borda de descida no botao do kit */
-	/* indica funcao (PRESENCA_Handler) a ser chamada quando houver uma interrup��o */
-	pio_enable_interrupt(PRESENCA_PIO, PRESENCA_PIN_MASK);
-	pio_handler_set(PRESENCA_PIO, PRESENCA_PIO_ID, PRESENCA_PIN_MASK, PIO_IT_FALL_EDGE, PRESENCA_Handler);
-	
+
 	/* habilita interrup�c�o do PIO que controla o botao */
 	/* e configura sua prioridade                        */
 	NVIC_EnableIRQ(PRESENCA_PIO_ID);
-	NVIC_SetPriority(PRESENCA_PIO_ID, 1);
+	NVIC_SetPriority(PRESENCA_PIO_ID, 6);
+	
+	/* config. interrupcao em borda de descida no botao do kit */
+	/* indica funcao (PRESENCA_Handler) a ser chamada quando houver uma interrup��o */
+	pio_handler_set(PRESENCA_PIO, PRESENCA_PIO_ID, PRESENCA_PIN_MASK, PIO_IT_RISE_EDGE, PRESENCA_Handler);
+
+	pio_enable_interrupt(PRESENCA_PIO, PRESENCA_PIN_MASK);
+	
+	
 };
 
 void LED_init(int estado){
@@ -928,7 +937,7 @@ static void task_wifi(void *pvParameters) {
 					close(tcp_client_socket);
 					tcp_client_socket = -1;
 					//printf("error\n");
-				}else{
+					}else{
 					//printf("CONECTADO no socket");
 					gbTcpConnection = true;
 				}
@@ -1005,7 +1014,7 @@ static void task_bme(void *pvParameters){
 			}
 			else{
 				temperatura = BME280_compensate_T_int32((int32_t)temperatura << 4, dig_T1, dig_T2, dig_T3)/100;
-					
+				
 				printf("Temperatura: %d C\n", temperatura);
 				data d = {D_TYPE_TEMP, temperatura, clock_buffer};
 				xQueueSend( xQueueSDCard, &d, 0);
@@ -1046,68 +1055,80 @@ static void task_bme(void *pvParameters){
 	
 }
 
-/*
+
 static void task_presenca(void *pvParameters){
-	xQueuePresen = xQueueCreate(10, sizeof(int32_t));
-	
-	PRESENCA_init();
-	
+
+	int flag_presen = 1;
+	uint8_t second2;
+	uint8_t minute2;
+	uint8_t hour2;
+	char clock_buffer2[100];
+
 	while(1){
-		
+
 		printf("task PRESENCA\n");
+		
+		if(xQueueReceive(xQueuePresen, &flag_presen, ( TickType_t )  5000 / portTICK_PERIOD_MS)){
+			rtc_get_time(RTC, &hour2, &minute2, &second2);
+			
+			sprintf(clock_buffer2, "H: %02d M: %02d S: %02d", hour2, minute2, second2);
+			data d = {D_TYPE_PRESENCA, flag_presen, clock_buffer2};
+			printf("valor do botaooo: %d\n",flag_presen);
+			xQueueSend( xQueueSDCard, &d, 0);
+		}
 		vTaskDelay(5000/portTICK_PERIOD_MS);
 	}
 }
-*/
+
 
 /*
 static void task_co2(void *pvParameters){
-	xQueueCo = xQueueCreate(10, sizeof(int32_t));
-	
-	CO2_init();
-	
-	while(1){
-		printf("task CO2\n");
-		vTaskDelay(5000/portTICK_PERIOD_MS);
-	}
+xQueueCo = xQueueCreate(10, sizeof(int32_t));
+
+CO2_init();
+
+while(1){
+printf("task CO2\n");
+vTaskDelay(5000/portTICK_PERIOD_MS);
+}
 }
 */
 
 /*
 static void task_molhado(void *pvParameters){
-	xQueueMolhado = xQueueCreate(10, sizeof(int32_t));
-	
-	MOLHADO_init();
-	
-	while(1){
-		printf("task molahdo\n");
-		vTaskDelay(6000/portTICK_PERIOD_MS);
-	}
+xQueueMolhado = xQueueCreate(10, sizeof(int32_t));
+
+MOLHADO_init();
+
+while(1){
+printf("task molahdo\n");
+vTaskDelay(6000/portTICK_PERIOD_MS);
+}
 }
 */
 
- void task_adc(void){
+void task_adc(void){
 	//PINO PD30
- 	
- 
- 	config_ADC_TEMP();
- 	afec_start_software_conversion(AFEC0);
- 	int32_t adcVal;
-	 
-	 uint8_t second2;
-	 uint8_t minute2;
-	 uint8_t hour2;
-	 char clock_buffer2[100];
-	 uint32_t flag = 1;
-	 
-	 uint32_t flag2 = 25;
-	 uint32_t flag3 = 20;
- 
- 	while (true) {
- 		if (xQueueReceive( xQueueCo, &(adcVal), ( TickType_t )  5000 / portTICK_PERIOD_MS)) {
+	
+	
+	config_ADC_TEMP();
+	afec_start_software_conversion(AFEC0);
+	int32_t adcVal;
+	
+	uint8_t second2;
+	uint8_t minute2;
+	uint8_t hour2;
+	char clock_buffer2[100];
+	uint32_t flag = 1;
+	
+	uint32_t flag2 = 25;
+	uint32_t flag3 = 20;
+	
+	while (true) {
+		if (xQueueReceive( xQueueCo, &(adcVal), ( TickType_t )  5000 / portTICK_PERIOD_MS)) {
 
 
-			 int convertido = adcVal*2-580;
+			int convertido = adcVal*2-580;
 			printf("CO2: %d g/m3\n", convertido);
 			rtc_get_time(RTC, &hour2, &minute2, &second2);
 			
@@ -1125,15 +1146,15 @@ static void task_molhado(void *pvParameters){
 			}
 			
 			
-	 		
- 		}
- 		
- 		vTaskDelay(5000/portTICK_PERIOD_MS);
- 
- 	}
- }
- 
-void task_sd_card(void){	
+			
+		}
+		
+		vTaskDelay(5000/portTICK_PERIOD_MS);
+		
+	}
+}
+
+void task_sd_card(void){
 
 	char test_file_name[] = "0:sd_mmc_test.txt";
 	char analog_file_name[] = "0:analog.txt";
@@ -1215,8 +1236,9 @@ void task_buz(void){
 	Bool cdtemp = false;
 	Bool cdco = false;
 	int last = 0;
-	
+
 	while (true){
+
 		if(xQueueReceive(xQueueBuz, &flag_buz, ( TickType_t )  5000 / portTICK_PERIOD_MS)){
 			if(flag_buz == 5){
 				if(!alarm && !cdtemp){
@@ -1301,7 +1323,7 @@ int main(void)
 	WDT->WDT_MR = WDT_MR_WDDIS;
 
 	RTC_init();
-			
+	
 	/* Initialize the UART console. */
 	configure_console();
 	printf(STRING_HEADER);
@@ -1317,7 +1339,13 @@ int main(void)
 	xQueueCo = xQueueCreate( 10, sizeof( int32_t ) );
 	xQueueICo = xQueueCreate( 10, sizeof( int32_t ) );
 	xQueueSDCard = xQueueCreate( 10, sizeof( data ) );
+	xQueuePresen = xQueueCreate( 10, sizeof( int32_t ) );
+
+
+
 	BUT_init();
+	PRESENCA_init();
+
 	
 	if (xTaskCreate(task_wifi, "Wifi", TASK_WIFI_STACK_SIZE, NULL,TASK_WIFI_STACK_PRIORITY, NULL) != pdPASS) {
 		printf("Failed to create Wifi task\r\n");
@@ -1330,20 +1358,20 @@ int main(void)
 	
 	/*
 	if (xTaskCreate(task_molhado, "molhado", TASK_GENERICO_STACK_SIZE, NULL,TASK_GENERICO_STACK_PRIORITY, NULL) != pdPASS) {
-		printf("Failed to create Molhado task\r\n");
+	printf("Failed to create Molhado task\r\n");
 	}
 	*/
 	/*
 	if (xTaskCreate(task_co2, "CO2", TASK_WIFI_STACK_SIZE, NULL,TASK_WIFI_STACK_PRIORITY, NULL) != pdPASS) {
-		printf("Failed to create CO2 task\r\n");
+	printf("Failed to create CO2 task\r\n");
 	}
 	*/
 	
-	/*
+	
 	if (xTaskCreate(task_presenca, "Presenca", TASK_GENERICO_STACK_SIZE, NULL,TASK_GENERICO_STACK_PRIORITY, NULL) != pdPASS) {
 		printf("Failed to create Presen�a task\r\n");
 	}
-	*/
+	
 	
 	///* Create task to handler LCD */
 	
