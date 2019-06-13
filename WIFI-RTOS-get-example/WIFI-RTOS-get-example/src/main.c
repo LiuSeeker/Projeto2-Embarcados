@@ -49,6 +49,7 @@ QueueHandle_t xQueueCo;
 QueueHandle_t xQueuePresen;
 QueueHandle_t xQueueMolhado;
 QueueHandle_t xQueueBuz;
+QueueHandle_t xQueueICo;
 
 SemaphoreHandle_t xSemaphoreRTC;
 
@@ -200,29 +201,39 @@ static void socket_cb(SOCKET sock, uint8_t u8Msg, void *pvMsg)
 		switch (u8Msg) {
 			case SOCKET_MSG_CONNECT:
 			{
-				printf("socket_msg_connect\n");
+				//printf("socket_msg_connect\n");
 				if (gbTcpConnection) {
 					memset(gau8ReceivedBuffer, 0, sizeof(gau8ReceivedBuffer));
-					sprintf((char *)gau8ReceivedBuffer, "%s", MAIN_PREFIX_BUFFER);
+					
 
 					tstrSocketConnectMsg *pstrConnect = (tstrSocketConnectMsg *)pvMsg;
 					if (pstrConnect && pstrConnect->s8Error >= SOCK_ERR_NO_ERROR) {
-						printf("send \n");
-						if(xQueueReceive(xQueueTemp, &flag_temp, ( TickType_t )  5000 / portTICK_PERIOD_MS)){
+						
+						//printf("send \n");
+						if (xQueueReceive( xQueueTemp, &flag_temp, ( TickType_t )  100 / portTICK_PERIOD_MS)){
+							sprintf((char *)gau8ReceivedBuffer, "%s", TEMP_PREFIX_BUFFER);
 							send(tcp_client_socket, gau8ReceivedBuffer, strlen((char *)gau8ReceivedBuffer), 0);
 
 							memset(gau8ReceivedBuffer, 0, MAIN_WIFI_M2M_BUFFER_SIZE);
 							recv(tcp_client_socket, &gau8ReceivedBuffer[0], MAIN_WIFI_M2M_BUFFER_SIZE, 0);
 						}
-						else {
-						printf("socket_cb: Nada pra enviar !\r\n");
-						gbTcpConnection = false;
-						close(tcp_client_socket);
-						tcp_client_socket = -1;
-					}
+						else if (xQueueReceive( xQueueICo, &flag_temp, ( TickType_t )  100 / portTICK_PERIOD_MS)){
+							sprintf((char *)gau8ReceivedBuffer, "%s", CO_PREFIX_BUFFER);
+							send(tcp_client_socket, gau8ReceivedBuffer, strlen((char *)gau8ReceivedBuffer), 0);
+
+							memset(gau8ReceivedBuffer, 0, MAIN_WIFI_M2M_BUFFER_SIZE);
+							recv(tcp_client_socket, &gau8ReceivedBuffer[0], MAIN_WIFI_M2M_BUFFER_SIZE, 0);
+						}
+						else{
+							printf("Nada a enviar!\n");
+							gbTcpConnection = false;
+							close(tcp_client_socket);
+							tcp_client_socket = -1;
+						}
+						
 					}
 					else {
-						printf("socket_cb: connect error!\r\n");
+						//printf("socket_cb: connect error!\r\n");
 						gbTcpConnection = false;
 						close(tcp_client_socket);
 						tcp_client_socket = -1;
@@ -877,7 +888,7 @@ static void task_wifi(void *pvParameters) {
 	param.pfAppWifiCb = wifi_cb;
 	ret = m2m_wifi_init(&param);
 	if (M2M_SUCCESS != ret) {
-		printf("main: m2m_wifi_init call error!(%d)\r\n", ret);
+		//printf("main: m2m_wifi_init call error!(%d)\r\n", ret);
 		while (1) {
 		}
 	}
@@ -904,21 +915,21 @@ static void task_wifi(void *pvParameters) {
 		if (wifi_connected == M2M_WIFI_CONNECTED) {
 			/* Open client socket. */
 			if (tcp_client_socket < 0) {
-				printf("socket init \n");
+				//printf("socket init \n");
 				if ((tcp_client_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-					printf("main: failed to create TCP client socket error!\r\n");
+					//printf("main: failed to create TCP client socket error!\r\n");
 					continue;
 				}
 
 				/* Connect server */
-				printf("socket connecting\n\n");
+				//printf("socket connecting\n\n");
 				
 				if (connect(tcp_client_socket, (struct sockaddr *)&addr_in, sizeof(struct sockaddr_in)) != SOCK_ERR_NO_ERROR) {
 					close(tcp_client_socket);
 					tcp_client_socket = -1;
-					printf("error\n");
+					//printf("error\n");
 				}else{
-					printf("CONECTADO no socket");
+					//printf("CONECTADO no socket");
 					gbTcpConnection = true;
 				}
 			}
@@ -995,7 +1006,7 @@ static void task_bme(void *pvParameters){
 			else{
 				temperatura = BME280_compensate_T_int32((int32_t)temperatura << 4, dig_T1, dig_T2, dig_T3)/100;
 					
-				printf("Temperatura: %d C\n", temperatura);
+				//printf("Temperatura: %d C\n", temperatura);
 				data d = {D_TYPE_TEMP, temperatura, clock_buffer};
 				xQueueSend( xQueueSDCard, &d, 0);
 				if(temperatura >= 32){
@@ -1012,7 +1023,7 @@ static void task_bme(void *pvParameters){
 			}
 			else{
 				pressao = BME280_compensate_P_int64((int32_t)pressao << 4, dig_P1, dig_P2, dig_P3, dig_P4, dig_P5, dig_P6, dig_P7, dig_P8, dig_P9);
-				printf("Pressao: %u Pa\n", pressao/256);
+				//printf("Pressao: %u Pa\n", pressao/256);
 				
 				data d = {D_TYPE_PRESSURE, pressao/256, clock_buffer};
 				xQueueSend( xQueueSDCard, &d, 0);
@@ -1024,7 +1035,7 @@ static void task_bme(void *pvParameters){
 			}
 			else{
 				umidade = bme280_compensate_H_int32((int32_t)umidade << 4, dig_H1, dig_H2, dig_H3, dig_H4, dig_H5, dig_H6)/1024;
-				printf("Umidade: %u %%\n", umidade);
+				//printf("Umidade: %u %%\n", umidade);
 				
 				data d = {D_TYPE_HUMIDITY, umidade, clock_buffer};
 				xQueueSend( xQueueSDCard, &d, 0);
@@ -1087,9 +1098,14 @@ static void task_molhado(void *pvParameters){
 	 uint8_t minute2;
 	 uint8_t hour2;
 	 char clock_buffer2[100];
+	 uint32_t flag = 1;
+	 
+	 uint32_t flag2 = 5;
+	 uint32_t flag3 = 10;
  
  	while (true) {
  		if (xQueueReceive( xQueueCo, &(adcVal), ( TickType_t )  5000 / portTICK_PERIOD_MS)) {
+
 
 			 int convertido = adcVal*2-580;
 			printf("CO2: %d g/m3\n", convertido);
@@ -1099,6 +1115,15 @@ static void task_molhado(void *pvParameters){
 			data d = {D_TYPE_SMOKE, convertido, clock_buffer2};
 			afec_start_software_conversion(AFEC0);
 			xQueueSend( xQueueSDCard, &d, 0);
+			
+			if(convertido >= 300){
+				xQueueSend(xQueueICo, &flag, 0);
+				xQueueSend(xQueueBuz, &flag2, 0);
+			}
+			if(convertido <= 280){
+				xQueueSend(xQueueBuz, &flag3, 0);
+			}
+			
 			
 	 		
  		}
@@ -1147,7 +1172,7 @@ void task_sd_card(void){
 		memset(&fs, 0, sizeof(FATFS));
 		res = f_mount(LUN_ID_SD_MMC_0_MEM, &fs);
 		if (FR_INVALID_DRIVE == res) {
-			printf("[FAIL] res %d\r\n", res);
+			//printf("[FAIL] res %d\r\n", res);
 			}else{
 			printf("[Mounting SDCARD Successful]\r\n");
 			break;
@@ -1155,25 +1180,25 @@ void task_sd_card(void){
 	}
 	while (true) {
 		
-		printf("Opening/Creating a file (f_open)...\r\n");
+		//printf("Opening/Creating a file (f_open)...\r\n");
 		analog_file_name[0] = LUN_ID_SD_MMC_0_MEM + '0';
 		res = f_open(&file_object,
 		(char const *)analog_file_name,
 		FA_OPEN_EXISTING | FA_WRITE);
 		if (res != FR_OK) {
-			printf("[FAIL] res %d\r\n", res);
+			//printf("[FAIL] res %d\r\n", res);
 		}
 
 		if (xQueueReceive( xQueueSDCard, &(d), ( TickType_t )  10 / portTICK_PERIOD_MS)) {
-			printf("Chegou Temp Information: %d",d.value);
+			//printf("Chegou Temp Information: %d",d.value);
 			f_lseek( &file_object, file_object.fsize );
 
 			if (0 == f_printf(&file_object, d.type, d.timestamp, d.value)) {
 				f_close(&file_object);
-				printf("[FAIL]\r\n");
+				//printf("[FAIL]\r\n");
 			}
 
-			printf("[OK]\r\n");
+			//printf("[OK]\r\n");
 			f_close(&file_object);
 		}
 
@@ -1249,6 +1274,7 @@ int main(void)
 	xQueuePress = xQueueCreate(10, sizeof(int));
 	xQueueUmi = xQueueCreate(10, sizeof(int));
 	xQueueCo = xQueueCreate( 10, sizeof( int32_t ) );
+	xQueueICo = xQueueCreate( 10, sizeof( int32_t ) );
 	xQueueSDCard = xQueueCreate( 10, sizeof( data ) );
 	BUT_init();
 	
