@@ -202,7 +202,7 @@ static void socket_cb(SOCKET sock, uint8_t u8Msg, void *pvMsg)
 		switch (u8Msg) {
 			case SOCKET_MSG_CONNECT:
 			{
-				//printf("socket_msg_connect\n");
+				printf("socket_msg_connect\n");
 				if (gbTcpConnection) {
 					memset(gau8ReceivedBuffer, 0, sizeof(gau8ReceivedBuffer));
 					
@@ -210,7 +210,7 @@ static void socket_cb(SOCKET sock, uint8_t u8Msg, void *pvMsg)
 					tstrSocketConnectMsg *pstrConnect = (tstrSocketConnectMsg *)pvMsg;
 					if (pstrConnect && pstrConnect->s8Error >= SOCK_ERR_NO_ERROR) {
 						
-						//printf("send \n");
+						printf("send \n");
 						if (xQueueReceive( xQueueTemp, &flag_temp, ( TickType_t )  100 / portTICK_PERIOD_MS)){
 							sprintf((char *)gau8ReceivedBuffer, "%s", TEMP_PREFIX_BUFFER);
 							send(tcp_client_socket, gau8ReceivedBuffer, strlen((char *)gau8ReceivedBuffer), 0);
@@ -218,13 +218,13 @@ static void socket_cb(SOCKET sock, uint8_t u8Msg, void *pvMsg)
 							memset(gau8ReceivedBuffer, 0, MAIN_WIFI_M2M_BUFFER_SIZE);
 							recv(tcp_client_socket, &gau8ReceivedBuffer[0], MAIN_WIFI_M2M_BUFFER_SIZE, 0);
 						}
-						else if (xQueueReceive( xQueueICo, &flag_temp, ( TickType_t )  100 / portTICK_PERIOD_MS)){
+						/*else if (xQueueReceive( xQueueICo, &flag_temp, ( TickType_t )  100 / portTICK_PERIOD_MS)){
 							sprintf((char *)gau8ReceivedBuffer, "%s", CO_PREFIX_BUFFER);
 							send(tcp_client_socket, gau8ReceivedBuffer, strlen((char *)gau8ReceivedBuffer), 0);
 
 							memset(gau8ReceivedBuffer, 0, MAIN_WIFI_M2M_BUFFER_SIZE);
 							recv(tcp_client_socket, &gau8ReceivedBuffer[0], MAIN_WIFI_M2M_BUFFER_SIZE, 0);
-						}
+						}*/
 						else{
 							printf("Nada a enviar!\n");
 							gbTcpConnection = false;
@@ -234,7 +234,7 @@ static void socket_cb(SOCKET sock, uint8_t u8Msg, void *pvMsg)
 						
 					}
 					else {
-						//printf("socket_cb: connect error!\r\n");
+						printf("socket_cb: connect error!\r\n");
 						gbTcpConnection = false;
 						close(tcp_client_socket);
 						tcp_client_socket = -1;
@@ -254,13 +254,11 @@ static void socket_cb(SOCKET sock, uint8_t u8Msg, void *pvMsg)
 				if (pstrRecv && pstrRecv->s16BufferSize > 0) {
 					printf(pstrRecv->pu8Buffer);
 					
-					char *ponteiro = strstr(pstrRecv->pu8Buffer, "nome");
-					
-					
-					
+					//char *ponteiro = strstr(pstrRecv->pu8Buffer, "nome");
+
 					memset(gau8ReceivedBuffer, 0, sizeof(gau8ReceivedBuffer));
 					recv(tcp_client_socket, &gau8ReceivedBuffer[0], MAIN_WIFI_M2M_BUFFER_SIZE, 0);
-					} else {
+				} else {
 					printf("socket_cb: recv error!\r\n");
 					close(tcp_client_socket);
 					tcp_client_socket = -1;
@@ -290,12 +288,12 @@ static void CO2_Handler(uint32_t id, uint32_t mask)
 }
 
 static void PRESENCA_Handler(uint32_t id, uint32_t mask){
-	int flage = 1;
+	int8_t flage = 1;
 	BaseType_t xHigherPriorityTaskWoken;
 
 	// We have not woken a task at the start of the ISR.
 	xHigherPriorityTaskWoken = pdFALSE;
-	xQueueSendFromISR(xQueuePresen, &flage, &xHigherPriorityTaskWoken);
+	xQueueSendFromISR(xQueuePresen, &flage, NULL);
 }
 
 static void MOLHADO_Handler(uint32_t id, uint32_t mask)
@@ -810,6 +808,7 @@ void PRESENCA_init(void){
 	/* e configura sua prioridade                        */
 	NVIC_EnableIRQ(PRESENCA_PIO_ID);
 	NVIC_SetPriority(PRESENCA_PIO_ID, 6);
+	NVIC_ClearPendingIRQ(PRESENCA_PIO_ID);
 	
 	/* config. interrupcao em borda de descida no botao do kit */
 	/* indica funcao (PRESENCA_Handler) a ser chamada quando houver uma interrup��o */
@@ -924,21 +923,21 @@ static void task_wifi(void *pvParameters) {
 		if (wifi_connected == M2M_WIFI_CONNECTED) {
 			/* Open client socket. */
 			if (tcp_client_socket < 0) {
-				//printf("socket init \n");
+				printf("socket init \n");
 				if ((tcp_client_socket = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-					//printf("main: failed to create TCP client socket error!\r\n");
+					printf("main: failed to create TCP client socket error!\r\n");
 					continue;
 				}
 
 				/* Connect server */
-				//printf("socket connecting\n\n");
+				printf("socket connecting\n\n");
 				
 				if (connect(tcp_client_socket, (struct sockaddr *)&addr_in, sizeof(struct sockaddr_in)) != SOCK_ERR_NO_ERROR) {
 					close(tcp_client_socket);
 					tcp_client_socket = -1;
-					//printf("error\n");
+					printf("error\n");
 					}else{
-					//printf("CONECTADO no socket");
+					printf("CONECTADO no socket");
 					gbTcpConnection = true;
 				}
 			}
@@ -1057,6 +1056,7 @@ static void task_bme(void *pvParameters){
 
 
 static void task_presenca(void *pvParameters){
+	
 
 	int flag_presen = 1;
 	uint8_t second2;
@@ -1069,12 +1069,17 @@ static void task_presenca(void *pvParameters){
 		printf("task PRESENCA\n");
 		
 		if(xQueueReceive(xQueuePresen, &flag_presen, ( TickType_t )  5000 / portTICK_PERIOD_MS)){
+			printf("valor do botaooo: %d\n",flag_presen);
 			rtc_get_time(RTC, &hour2, &minute2, &second2);
-			
 			sprintf(clock_buffer2, "H: %02d M: %02d S: %02d", hour2, minute2, second2);
 			data d = {D_TYPE_PRESENCA, flag_presen, clock_buffer2};
-			printf("valor do botaooo: %d\n",flag_presen);
+			
 			xQueueSend( xQueueSDCard, &d, 0);
+			
+			
+			
+			
+			
 		}
 		vTaskDelay(5000/portTICK_PERIOD_MS);
 	}
@@ -1332,6 +1337,7 @@ int main(void)
 	LED_init(1);
 	
 	/* Configura os bot�es */
+	xQueuePresen = xQueueCreate( 10, sizeof( int8_t ) );
 	xQueueBuz = xQueueCreate(10, sizeof(int));
 	xQueueTemp = xQueueCreate(10, sizeof(int));
 	xQueuePress = xQueueCreate(10, sizeof(int));
@@ -1339,12 +1345,12 @@ int main(void)
 	xQueueCo = xQueueCreate( 10, sizeof( int32_t ) );
 	xQueueICo = xQueueCreate( 10, sizeof( int32_t ) );
 	xQueueSDCard = xQueueCreate( 10, sizeof( data ) );
-	xQueuePresen = xQueueCreate( 10, sizeof( int32_t ) );
+	
 
-
+	PRESENCA_init();
 
 	BUT_init();
-	PRESENCA_init();
+	
 
 	
 	if (xTaskCreate(task_wifi, "Wifi", TASK_WIFI_STACK_SIZE, NULL,TASK_WIFI_STACK_PRIORITY, NULL) != pdPASS) {

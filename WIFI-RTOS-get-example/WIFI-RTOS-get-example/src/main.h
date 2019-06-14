@@ -19,21 +19,21 @@ static uint8_t gau8MacAddr[] = MAIN_MAC_ADDRESS;
 static uint8_t gacDeviceName[] = MAIN_M2M_DEVICE_NAME;
 
 /** Using broadcast address for simplicity. */
-#define MAIN_SERVER_PORT                    (8000)
+#define MAIN_SERVER_PORT                    (80)
 
 /** IP address parsing. */
 #define IPV4_BYTE(val, index)               ((val >> (index * 8)) & 0xFF)
 
 /** Send buffer of TCP socket. */
-#define TEMP_PREFIX_BUFFER                  "GET /d?data=temperatura HTTP/1.1\r\n Accept: */*\r\n\r\n"
-#define CO_PREFIX_BUFFER					"GET /d?data=co2 HTTP/1.1\r\n Accept: */*\r\n\r\n"
+#define TEMP_PREFIX_BUFFER                  "GET /d?data=temperatura HTTP/1.1\r\n Accept: */*\r\nHost: juanjg.pythonanywhere.com\r\n\r\n"
+#define CO_PREFIX_BUFFER					"GET /d?data=co2 HTTP/1.1\r\n Accept: */*\r\nHost: juanjg.pythonanywhere.com\r\n\r\n"
 
 
 /** Weather information provider server. */
-#define MAIN_SERVER_NAME                    "35.173.69.207"
+#define MAIN_SERVER_NAME                    "35.173.69.207"//"35.173.69.207"
 
 /** Receive buffer size. */
-#define MAIN_WIFI_M2M_BUFFER_SIZE           1400
+#define MAIN_WIFI_M2M_BUFFER_SIZE           10000
 
 #define MAIN_HEX2ASCII(x)                   (((x) >= 10) ? (((x) - 10) + 'A') : ((x) + '0'))
 
